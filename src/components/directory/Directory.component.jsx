@@ -1,7 +1,7 @@
 import Category from "../category/Category.component"
+import "./categories.styles.scss"
 
 const Directory = ({categories}) => {
-    console.log(categories)
   return (
     <div className="categories-container">
       {categories.map((category) => (

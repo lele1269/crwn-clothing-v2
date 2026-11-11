@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { GoogleAuthProvider, getAuth, signInWithPopup, signInWithRedirect  } from "firebase/auth";
+import { GoogleAuthProvider, getAuth, signInWithPopup, signInWithRedirect, createUserWithEmailAndPassword  } from "firebase/auth";
 import { getFirestore, doc, getDoc, setDoc } from "firebase/firestore";
 
 // Your web app's Firebase configuration
@@ -21,37 +21,46 @@ googleProvider.setCustomParameters({
   prompt: "select_account"
 })
 
-export const auth = getAuth(app);
+export const auth = getAuth(app); // con una sola app, getAuth() userebbe comunque quella predefinita
 export const signInWithGooglePopUp = () => signInWithPopup(auth, googleProvider);
 export const singInWithGoogleRedirect = () => signInWithRedirect(auth, googleProvider);
+export const createAuthUserWithEmailandPassword = async (email, password) => {
+  if(!email||!password) return;
+  return await createUserWithEmailAndPassword(auth, email, password);
+}
 
 
 export const db = getFirestore();
 //Astrazione che possiamo riutilizzare nei componenti
-export const createUserDocumentationFromAuth = async (userAuth) => {
- //definizione della referenza di un documento nella collezione "users"
- const userDocRef = doc(db, "users", userAuth.uid); //abbiamo la variabile che contiene il puntatore
+export const createUserDocumentationFromAuth = async (
+  userAuth,
+  additionalInfo = {},
+) => {
+  //definizione della referenza di un documento nella collezione "users"
+  const userDocRef = doc(db, "users", userAuth.uid); //abbiamo la variabile che contiene il puntatore
 
- //ci salviamo l'oggetto dei dati user di questo momento in una variabile userSnapShot
- const userSnapshot = await getDoc(userDocRef); //otteniamo i dati del documento di questo cliente.
- //adesso dobbiamo verificare che esista e nel caso aggiornare o inserire
- if(!userSnapshot.exists()){
-  const { displayName, email} = userAuth;
-  const createdAt = new Date();
-  try{
-    //si utilizza setDoc per impostare i dati del documento a cui passiamo i puntatore ottenuto con la variabile userDocRef
-    await setDoc(userDocRef, {
-      displayName,
-      email,
-      createdAt
-    })
-  console.log("User created in Firestore");
-  }catch(err){
-    console.log('Error creating new user', err.message)
+  //otteniamo i dati del documento dell'user (appunto lo snapShot) presenti in firestore: può restituire null se non esiste e quindi lo crea.;
+  const userSnapshot = await getDoc(userDocRef);
+  //se non esiste lo crea. Quindi questo blocco viene eseguito solo se user.uid non esiste.
+  if (!userSnapshot.exists()) {
+    const { displayName, email } = userAuth;
+    const createdAt = new Date();
+    try {
+      //si utilizza setDoc per impostare i dati del documento a cui passiamo i puntatore ottenuto con la variabile userDocRef
+      await setDoc(userDocRef, {
+        displayName,
+        email,
+        createdAt,
+        ...additionalInfo
+      });
+      console.log("User created in Firestore");
+    } catch (err) {
+      console.log("Error creating new user", err.message);
+    }
   }
- }
- return userDocRef; //restituisce i dati del documento senza creare l'utente.
-}
+  // Restituisce il riferimento al documento dell'utente (nuovo o già esistente).
+  return userDocRef;
+};
 
 
 

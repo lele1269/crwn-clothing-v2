@@ -1,0 +1,12 @@
+.sign-up-container{
+    display: flex;
+    flex-direction: column;
+    width: 50%;
+    margin: 2vw 2vw 2vw auto;
+    padding: 20px;
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    max-height: max-content;
+    height: 100%;
+}

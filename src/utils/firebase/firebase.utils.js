@@ -1,5 +1,12 @@
 import { initializeApp } from "firebase/app";
-import { GoogleAuthProvider, getAuth, signInWithPopup, signInWithRedirect, createUserWithEmailAndPassword  } from "firebase/auth";
+import {
+  GoogleAuthProvider,
+  getAuth,
+  signInWithPopup,
+  signInWithRedirect,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+} from "firebase/auth";
 import { getFirestore, doc, getDoc, setDoc } from "firebase/firestore";
 
 // Your web app's Firebase configuration
@@ -27,6 +34,9 @@ export const singInWithGoogleRedirect = () => signInWithRedirect(auth, googlePro
 export const createAuthUserWithEmailandPassword = async (email, password) => {
   if(!email||!password) return;
   return await createUserWithEmailAndPassword(auth, email, password);
+}
+export const signInAuthWithEmailAndPassword = async (email, password) => {
+  return await signInWithEmailAndPassword(auth, email, password)
 }
 
 

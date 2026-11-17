@@ -1,6 +1,11 @@
 import { useState } from 'react'
-import { createAuthUserWithEmailandPassword, createUserDocumentationFromAuth } from  '../../utils/firebase/firebase.utils'
-
+import FormInput from './../../components/form/form.component';
+import {
+  createAuthUserWithEmailandPassword,
+  createUserDocumentationFromAuth,
+} from "../../utils/firebase/firebase.utils";
+import Button from './../button/button.component'
+import './sign-up.style.scss'
 const formFields = {
     displayName: '',
     email: '',
@@ -22,8 +27,13 @@ const onChangeHandler = (e) =>{
     });
 }
 
+const resetFormFields = () => {
+  setFormValues(formFields);
+}
+
 const onSubmitHandler = async (e) => {
   e.preventDefault();
+  console.log(e);
   if (password !== confirmPassword) {
     alert("Password does not match");
     return;
@@ -37,49 +47,58 @@ const onSubmitHandler = async (e) => {
     // Passiamo displayName come info aggiuntiva perché con email/password
     // user.displayName è null.
     await createUserDocumentationFromAuth(user, { displayName });
+    resetFormFields(); // Resetta i campi del form
   } catch (err) {
-    console.log("Errore nella registrazione", err.code);
+    if (err.code === "auth/email-already-in-use"){
+      alert("Email already in use");
+      return;
+    }else{
+      console.log("Errore nella registrazione", err.code);
+    }
   }
 };
     return (
-      <div>
-        <h1>Sign Up form</h1>
-        <form onSubmit={onSubmitHandler}>
-          <label>Display Name:</label>
-          <input
-            onChange={onChangeHandler}
-            name="displayName"
-            type="text"
-            value={displayName}
-            required
-          />
-          <label>Email:</label>
-          <input
-            onChange={onChangeHandler}
-            name="email"
-            type="email"
-            value={email}
-            required
-          />
-          <label>Password:</label>
-          <input
-            onChange={onChangeHandler}
-            name="password"
-            type="password"
-            value={password}
-            required
-          />
-          <label>Confirm Password:</label>
-          <input
-            onChange={onChangeHandler}
-            name="confirmPassword"
-            type="password"
-            value={confirmPassword}
-            required
-          />
-          <button type="submit">Sign Up</button>
-        </form>
-      </div>
+        <div className="sign-up-container">
+          <h2>Don't have an account?</h2>
+          <span>Sign Up with your Email and Password</span>
+          <form onSubmit={onSubmitHandler}>
+            <FormInput
+              label="Display Name"
+              onChange={onChangeHandler}
+              name="displayName"
+              type="text"
+              value={displayName}
+              required
+            />
+            <FormInput
+              label="Email:"
+              onChange={onChangeHandler}
+              name="email"
+              type="email"
+              value={email}
+              required
+            />
+            <FormInput
+              label="Password:"
+              onChange={onChangeHandler}
+              name="password"
+              type="password"
+              value={password}
+              required
+            />
+            <FormInput
+              label="Confirm Password:"
+              onChange={onChangeHandler}
+              name="confirmPassword"
+              type="password"
+              value={confirmPassword}
+              required
+            />
+            <Button buttonType={"base"} type="submit">
+              Sign Up
+            </Button>
+          </form>
+    </div>
     );
 }
 export default SignUp;

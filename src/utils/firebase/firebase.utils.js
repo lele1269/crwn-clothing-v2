@@ -30,14 +30,15 @@ googleProvider.setCustomParameters({
 
 export const auth = getAuth(app); // con una sola app, getAuth() userebbe comunque quella predefinita
 export const signInWithGooglePopUp = () => signInWithPopup(auth, googleProvider);
-export const singInWithGoogleRedirect = () => signInWithRedirect(auth, googleProvider);
+export const signInWithGoogleRedirect = () => signInWithRedirect(auth, googleProvider);
 export const createAuthUserWithEmailandPassword = async (email, password) => {
   if(!email||!password) return;
   return await createUserWithEmailAndPassword(auth, email, password);
 }
 export const signInAuthWithEmailAndPassword = async (email, password) => {
-  return await signInWithEmailAndPassword(auth, email, password)
-}
+  if (!email || !password) return;
+  return await signInWithEmailAndPassword(auth, email, password);
+};
 
 
 export const db = getFirestore();

@@ -1,13 +1,8 @@
 import { render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
 import App from './App';
 
-test('renders navigation links', () => {
-  render(
-    <MemoryRouter>
-      <App />
-    </MemoryRouter>,
-  );
-  expect(screen.getByText("SHOP")).toBeInTheDocument();
-  expect(screen.getByText("SIGN IN")).toBeInTheDocument();
+test('renders learn react link', () => {
+  render(<App />);
+  const linkElement = screen.getByText(/learn react/i);
+  expect(linkElement).toBeInTheDocument();
 });

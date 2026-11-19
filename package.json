@@ -18,13 +18,28 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "lint": "eslint \"src/**/*.{js,jsx}\"",
+    "lint:fix": "eslint \"src/**/*.{js,jsx}\" --fix",
+    "lint:css": "stylelint \"src/**/*.scss\"",
+    "format": "prettier --write \"src/**/*.{js,jsx,scss,css,json}\"",
+    "format:check": "prettier --check \"src/**/*.{js,jsx,scss,css,json}\""
   },
   "eslintConfig": {
     "extends": [
       "react-app",
-      "react-app/jest"
-    ]
+      "react-app/jest",
+      "prettier"
+    ],
+    "rules": {
+      "no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
+      "no-var": "error",
+      "prefer-const": "warn",
+      "eqeqeq": ["error", "always"],
+      "no-console": ["warn", { "allow": ["warn", "error"] }],
+      "react/jsx-no-useless-fragment": "warn",
+      "react/self-closing-comp": "warn"
+    }
   },
   "browserslist": {
     "production": [
@@ -37,5 +52,11 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "devDependencies": {
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.10.1",
+    "stylelint": "^17.16.0",
+    "stylelint-config-standard-scss": "^17.0.0"
   }
 }

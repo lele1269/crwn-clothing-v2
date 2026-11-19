@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>M6 · End-to-end</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-root=".." data-module="m6">
+<div class="lab">
+<nav class="lab-nav" id="lab-nav"></nav>
+<main class="lab-main">
+
+<div class="kicker">Modulo 6 · Tutto insieme</div>
+<h1>Il viaggio completo di un utente</h1>
+<p class="lead">Sign-up, refresh, sign-out: ogni dato, in ogni momento, in ogni posto in cui vive. E un metodo per fare debug quando qualcosa non torna.</p>
+<ul class="toc">
+  <li><a href="#problema">① Il problema</a></li><li><a href="#teoria">② Le fonti di verità</a></li><li><a href="#modello">③ Mappa</a></li><li><a href="#flusso">④ Il viaggio</a></li><li><a href="#dati">⑤ Istantanea</a></li><li><a href="#codice">⑥ I file</a></li><li><a href="#componenti">⑦ Albero completo</a></li><li><a href="#documentazione">⑧ Strumenti</a></li><li><a href="#errori">⑨ Debug playbook</a></li><li><a href="#verifica">⑩ Verifica</a></li><li><a href="#esercizi">⑪ Esercizi</a></li>
+</ul>
+
+<h2 id="problema"><span class="section-num">1</span>Il problema: lo stesso utente esiste in quattro posti</h2>
+<p>"L'utente Sara" non è un dato unico. È un account sul server Auth, una sessione nel browser, un documento in Firestore e un oggetto nello state di React. Quando qualcosa non va ("vedo SIGN IN ma sono loggata", "il nome è vuoto"), la domanda da dev è sempre la stessa: <b>quale delle quattro copie è sbagliata, e perché non è sincronizzata con le altre?</b></p>
+
+<h2 id="teoria"><span class="section-num">2</span>Le fonti di verità</h2>
+<div class="table-wrap"><table>
+<tr><th>Dove</th><th>Cosa contiene</th><th>Chi lo scrive</th><th>Sopravvive al refresh?</th><th>Sopravvive al cambio di dispositivo?</th></tr>
+<tr><td><span class="pill auth">Server Auth</span></td><td>account: uid, email, hash della password, provider</td><td>sign-up / login (SDK)</td><td>sì</td><td>sì</td></tr>
+<tr><td><span class="pill auth">IndexedDB</span> <code>firebaseLocalStorageDb</code></td><td>la sessione: utente e token</td><td>SDK, a ogni login / logout</td><td>sì</td><td>no</td></tr>
+<tr><td><span class="pill fs">Firestore</span> <code>users/{uid}</code></td><td>profilo: displayName, email, createdAt</td><td><code>createUserDocumentFromAuth</code></td><td>sì</td><td>sì</td></tr>
+<tr><td><span class="pill react">React state</span> <code>currentUser</code></td><td>l'oggetto User per la UI</td><td>il listener in UserProvider</td><td><b>no</b>: riparte da <code>null</code></td><td>no</td></tr>
+</table></div>
+<div class="callout"><span class="title">La regola di sincronizzazione del corso</span>
+<b>Auth è la fonte di verità per "chi è loggato".</b> React non decide mai da solo: si allinea tramite <code>onAuthStateChanged</code>. <b>Firestore è la fonte di verità per il profilo</b>: viene creato una volta e poi solo letto. Ogni bug di questo modulo è una violazione di una di queste due regole.</div>
+
+<h2 id="modello"><span class="section-num">3</span>Mappa</h2>
+<div class="card">
+<svg class="diagram" viewBox="0 0 900 300" role="img" aria-label="Mappa dei quattro luoghi in cui vive l'utente">
+  <rect class="box" x="15" y="15" width="440" height="270" rx="12" style="stroke:var(--ink);stroke-dasharray:6 4;fill:none"/>
+  <text x="30" y="38" font-weight="700">💻 Browser (si perde al cambio di dispositivo)</text>
+  <rect class="box react" x="35" y="55" width="200" height="105" rx="10"/><text x="135" y="80" text-anchor="middle" font-weight="700" class="t-react">Memoria React</text><text x="50" y="104" font-size="11.5" class="mono">currentUser</text><text x="50" y="124" font-size="11.5" class="mono">formFields, cartItems…</text><text x="50" y="146" font-size="11" style="fill:var(--bad)">✘ persa al refresh</text>
+  <rect class="box auth" x="250" y="55" width="190" height="105" rx="10"/><text x="345" y="80" text-anchor="middle" font-weight="700" class="t-auth">IndexedDB</text><text x="262" y="104" font-size="11.5" class="mono">sessione + token</text><text x="262" y="124" font-size="11.5" class="mono">firebaseLocalStorageDb</text><text x="262" y="146" font-size="11" style="fill:var(--good)">✔ resiste al refresh</text>
+  <rect class="box" x="35" y="180" width="405" height="90" rx="10" style="stroke:var(--warn)"/><text x="237" y="205" text-anchor="middle" font-weight="700">SDK Firebase (in memoria)</text><text x="50" y="230" font-size="11.5" class="mono">auth.currentUser · lista dei listener · cache</text><text x="50" y="252" font-size="11" class="muted">ricostruito a ogni caricamento leggendo IndexedDB (asincrono!)</text>
+  <rect class="box" x="490" y="15" width="395" height="270" rx="12" style="stroke:var(--ink);stroke-dasharray:6 4;fill:none"/>
+  <text x="505" y="38" font-weight="700">☁️ Server Google (permanente)</text>
+  <rect class="box auth" x="510" y="55" width="355" height="95" rx="10"/><text x="687" y="82" text-anchor="middle" font-weight="700" class="t-auth">🔐 Auth</text><text x="525" y="108" font-size="11.5" class="mono">uid · email · hash password · provider</text><text x="525" y="130" font-size="11" class="muted">fonte di verità: "chi è loggato"</text>
+  <rect class="box fs" x="510" y="170" width="355" height="95" rx="10"/><text x="687" y="197" text-anchor="middle" font-weight="700" class="t-fs">🗄️ Firestore</text><text x="525" y="223" font-size="11.5" class="mono">users/{uid}: displayName, email, createdAt</text><text x="525" y="245" font-size="11" class="muted">fonte di verità: "il profilo"</text>
+</svg>
+</div>
+
+<h2 id="flusso"><span class="section-num">4</span>Il viaggio, passo per passo</h2>
+<p>Il pannello a destra è la <b>mappa degli stati</b>: per ogni passo mostra cosa c'è nei quattro posti. Cerca il momento in cui sono <b>disallineati</b>: è lì che nascono i bug.</p>
+<template id="svg-e2e">
+<svg class="diagram" viewBox="0 0 900 250" role="img" aria-label="Componenti, provider, SDK e server">
+  <g data-node="form"><rect class="box react" x="15" y="20" width="160" height="60" rx="10"/><text x="95" y="46" text-anchor="middle" font-weight="700" class="t-react">SignUpForm</text><text x="95" y="66" text-anchor="middle" font-size="11" class="muted">/ SignInForm</text></g>
+  <g data-node="nav"><rect class="box react" x="15" y="170" width="160" height="60" rx="10"/><text x="95" y="196" text-anchor="middle" font-weight="700" class="t-react">Navigation</text><text x="95" y="216" text-anchor="middle" font-size="11" class="mono">currentUser ?</text></g>
+  <g data-node="prov"><rect class="box react" x="215" y="95" width="170" height="70" rx="10"/><text x="300" y="122" text-anchor="middle" font-weight="700" class="t-react">UserProvider</text><text x="300" y="144" text-anchor="middle" font-size="11" class="mono">state + listener</text></g>
+  <g data-node="sdk"><rect class="box" x="430" y="80" width="180" height="100" rx="10" style="stroke:var(--warn)"/><text x="520" y="108" text-anchor="middle" font-weight="700">SDK</text><text x="520" y="130" text-anchor="middle" font-size="11" class="mono">auth.currentUser</text><text x="520" y="150" text-anchor="middle" font-size="11" class="mono">listener[]</text></g>
+  <g data-node="idb"><rect class="box auth" x="430" y="200" width="180" height="40" rx="8"/><text x="520" y="225" text-anchor="middle" font-size="12" class="mono">IndexedDB</text></g>
+  <g data-node="auth"><rect class="box auth" x="660" y="20" width="225" height="80" rx="10"/><text x="772" y="55" text-anchor="middle" font-weight="700" class="t-auth">🔐 Auth server</text></g>
+  <g data-node="fs"><rect class="box fs" x="660" y="150" width="225" height="80" rx="10"/><text x="772" y="185" text-anchor="middle" font-weight="700" class="t-fs">🗄️ Firestore</text></g>
+  <path data-node="w-form" data-flow class="wire wire-auth" d="M175 50 C 300 50 380 70 428 100"/>
+  <path data-node="w-auth" data-flow class="wire wire-auth" d="M610 100 C 630 80 640 60 658 60"/>
+  <path data-node="w-idb" data-flow class="wire wire-auth" d="M520 180 V198"/>
+  <path data-node="w-cb" data-flow class="wire wire-auth" d="M430 130 H387"/>
+  <path data-node="w-doc" data-flow class="wire wire-fs" d="M385 150 C 500 200 600 200 658 190"/>
+  <path data-node="w-ctx" data-flow class="wire wire-react" d="M215 150 C 180 170 160 170 150 168"/>
+  <path data-node="w-out" data-flow class="wire wire-auth" d="M175 200 C 300 240 380 200 430 160"/>
+</svg>
+</template>
+<div id="flow"></div>
+
+<h2 id="dati"><span class="section-num">5</span>Istantanea: un utente loggato, a riposo</h2>
+<div id="insp-all" class="card"></div>
+
+<h2 id="codice"><span class="section-num">6</span>I file coinvolti</h2>
+<div class="table-wrap"><table>
+<tr><th>File</th><th>Responsabilità</th><th>Modulo</th></tr>
+<tr><td><code>src/index.js</code></td><td>monta i Provider attorno ad App</td><td>M5</td></tr>
+<tr><td><code>src/utils/firebase/firebase.utils.js</code></td><td>unico punto di contatto con Firebase</td><td>M1, M2, M3</td></tr>
+<tr><td><code>src/contexts/user.context.jsx</code></td><td>sincronizza React con Auth (listener)</td><td>M5</td></tr>
+<tr><td><code>src/components/sign-up-form/…</code></td><td>raccoglie i dati, avvia il sign-up</td><td>M4, M2, M3</td></tr>
+<tr><td><code>src/components/sign-in-form/…</code></td><td>login con email o Google</td><td>M4, M2</td></tr>
+<tr><td><code>src/routes/navigation/…</code></td><td>mostra lo stato di login, logout</td><td>M5</td></tr>
+</table></div>
+
+<h2 id="componenti"><span class="section-num">7</span>L'albero completo, con i collegamenti</h2>
+<pre class="code">index.js
+└─ &lt;React.StrictMode>
+   └─ &lt;BrowserRouter>
+      └─ &lt;UserProvider>                 ── onAuthStateChangedListener ──► SDK Auth
+         │   state: currentUser          ── createUserDocumentFromAuth ─► Firestore
+         └─ &lt;App> → &lt;Routes>
+            └─ &lt;Navigation>              ◄── useContext(UserContext)
+               │   SIGN IN / SIGN OUT    ── signOutUser ───────────────► SDK Auth
+               └─ &lt;Outlet>
+                  ├─ &lt;Home>
+                  └─ &lt;Authentication>
+                     ├─ &lt;SignInForm>     ── signInWithGooglePopup / …Email… ─► SDK Auth
+                     └─ &lt;SignUpForm>     ── createAuthUser… + createUserDocument… ─► Auth, Firestore</pre>
+<p>Nota come <b>nessuna freccia va da un form a Navigation</b>. I form parlano solo con Firebase, Navigation ascolta solo il context, ed è il listener a collegare i due mondi. È il disaccoppiamento che hai visto nascere in M5 (dalla v1 alla v2).</p>
+
+<h2 id="documentazione"><span class="section-num">8</span>Gli strumenti per vedere i dati</h2>
+<div class="table-wrap"><table>
+<tr><th>Voglio vedere…</th><th>Strumento</th><th>Dove</th></tr>
+<tr><td>lo state e i context di React</td><td><b>React Developer Tools</b> (estensione del browser)</td><td>tab "Components": seleziona UserProvider → hooks → State</td></tr>
+<tr><td>la sessione salvata</td><td>DevTools del browser</td><td>Application → IndexedDB → <code>firebaseLocalStorageDb</code></td></tr>
+<tr><td>le richieste a Firebase</td><td>DevTools</td><td>Network: filtra per <code>firestore.googleapis.com</code> e <code>identitytoolkit</code></td></tr>
+<tr><td>gli account</td><td>Console Firebase</td><td>Authentication → Users</td></tr>
+<tr><td>i documenti</td><td>Console Firebase</td><td>Firestore Database → Data</td></tr>
+<tr><td>perché una richiesta è stata rifiutata</td><td>Console Firebase</td><td>Firestore → Rules → <b>Rules Playground</b> (simula una richiesta)</td></tr>
+<tr><td>gli errori</td><td>Console del browser</td><td>leggi <code>error.code</code>, non solo il messaggio</td></tr>
+</table></div>
+
+<h2 id="errori"><span class="section-num">9</span>Debug playbook: sintomo → causa → dove guardare</h2>
+<div class="table-wrap"><table>
+<tr><th>Sintomo</th><th>Causa probabile</th><th>Come verificarlo</th><th>Rif.</th></tr>
+<tr><td>Al caricamento lampeggia "SIGN IN" anche se sono loggato</td><td><code>null</code> usato sia per "sconosciuto" sia per "uscito"</td><td>React DevTools: currentUser è null nel primo render</td><td>M5 q6, M5 E3</td></tr>
+<tr><td>Dopo il login la Navigation non cambia</td><td>componente fuori dal Provider (default), oppure listener non registrato o disiscritto subito</td><td>React DevTools: il consumer ha un Provider sopra? Il valore è il default?</td><td>M5 ❶, q4</td></tr>
+<tr><td>Il documento ha <code>displayName: null</code> dopo il sign-up</td><td>race tra il listener e il form</td><td>console Firestore + ordine dei log</td><td>M5 q7</td></tr>
+<tr><td>"Missing or insufficient permissions"</td><td>Security Rules (spesso il test mode scaduto)</td><td>Rules Playground</td><td>M1 q6, M1 E4</td></tr>
+<tr><td>Password sbagliata e nessun messaggio</td><td>switch su codici di errore superati</td><td><code>console.log(error.code)</code></td><td>M2 ⑧</td></tr>
+<tr><td>"Uncaught (in promise)" chiudendo il popup</td><td>manca il try/catch</td><td>stack trace in console</td><td>M2 q7</td></tr>
+<tr><td><code>x.exists is not a function</code></td><td>manca <code>await</code></td><td>leggi cosa c'è dentro x</td><td>M3 ❶</td></tr>
+<tr><td>Il carrello non si aggiorna, ma i dati ci sono</td><td>mutazione dello state</td><td>stesso riferimento prima e dopo</td><td>M5 ❷</td></tr>
+<tr><td>La UI si aggiorna "in ritardo di un passo"</td><td>stato derivato tenuto con useEffect, oppure lettura subito dopo il set</td><td>log nel render</td><td>M5 ❹, M0 ❸</td></tr>
+</table></div>
+<div class="callout"><span class="title">Il metodo, in 5 righe</span>
+<ol style="margin:0">
+<li><b>Riproduci</b> il bug in modo affidabile: sempre gli stessi passi.</li>
+<li><b>Localizza</b>: quale dei quattro posti ha il dato sbagliato? Guardali tutti con gli strumenti della sezione ⑧.</li>
+<li><b>Risali</b>: chi scrive quel dato? Quando? Segui la catena all'indietro.</li>
+<li><b>Ipotizza e verifica</b> una causa alla volta, con un <code>console.log</code> mirato o un breakpoint. Non cambiare tre cose insieme.</li>
+<li><b>Generalizza</b>: quale idea sbagliata ha prodotto il bug? Dove altro potrebbe esserci?</li>
+</ol></div>
+
+<h2 id="verifica"><span class="section-num">10</span>Verifica</h2>
+<div class="callout" id="score"></div>
+<div id="q1"></div><div id="q2"></div><div id="q3"></div><div id="q4"></div><div id="q5"></div>
+
+<h2 id="esercizi"><span class="section-num">11</span>Esercizi</h2>
+<div id="ex-list"></div>
+<div class="footer-nav"><a class="btn" href="m5-context.html">← M5</a><a class="btn" href="../index.html">Dashboard →</a></div>
+</main>
+</div>
+<script src="../assets/manifest.js"></script>
+<script src="../assets/registro.js"></script>
+<script src="../assets/glossario.js"></script>
+<script src="../assets/app.js"></script>
+<script>
+const U = { __type: 'User', uid: 'sR4x9', email: 'sara@mail.it', displayName: null };
+const MAP = (auth, idb, fs, react, nav) => ({ '☁️ Auth server': auth, '💾 IndexedDB': idb, '☁️ Firestore users/sR4x9': fs, '⚛️ React currentUser': react, '🧭 Navigation mostra': nav });
+const FSDOC = { displayName: 'Sara', email: 'sara@mail.it', createdAt: { __type: 'Timestamp' } };
+Lab.renderInspector(document.getElementById('insp-all'), MAP({ __type: 'account', uid: 'sR4x9', email: 'sara@mail.it', provider: 'password' }, { __type: 'sessione', uid: 'sR4x9', token: 'eyJhbGciOi… (scade e si rinnova)' }, FSDOC, U, 'SIGN OUT'));
+
+Lab.stepper('#flow', { title: 'Sara: dalla registrazione al logout', svg: '#svg-e2e', variants: {
+  signup: { label: '1 · Sign-up', steps: [
+    { title: 'Avvio: tutto vuoto', on: ['prov', 'sdk', 'nav'], dataLabel: 'Mappa degli stati', text: '<p>Sara non ha mai visitato il sito. Il listener viene registrato, la prima callback arriva con <code>null</code>, e Navigation mostra SIGN IN.</p>', data: MAP(null, null, null, null, 'SIGN IN') },
+    { title: 'Submit del form', on: ['form', 'sdk', 'auth'], hot: ['w-form', 'w-auth'], dataLabel: 'Mappa degli stati', text: '<p><code>createAuthUserWithEmailAndPassword</code>: il server crea l\'account e restituisce un utente <b>già loggato</b> (M2).</p>', data: MAP({ __type: 'account', uid: 'sR4x9' }, null, null, null, 'SIGN IN') },
+    { title: 'L\'SDK salva la sessione', on: ['sdk', 'idb'], hot: ['w-idb'], dataLabel: 'Mappa degli stati', text: '<p>La sessione viene scritta in IndexedDB. Da questo istante, un refresh troverebbe Sara loggata.</p>', data: MAP({ __type: 'account', uid: 'sR4x9' }, { __type: 'sessione', uid: 'sR4x9' }, null, null, 'SIGN IN') },
+    { title: 'Il listener scatta (prima che il form finisca!)', on: ['sdk', 'prov', 'fs'], hot: ['w-cb', 'w-doc'], dataLabel: 'Mappa degli stati', text: '<p>La callback riceve Sara, con <code>displayName: null</code>. Parte <code>createUserDocumentFromAuth(user)</code> <b>senza</b> il nome. Intanto il form è ancora fermo sull\'<code>await</code>.</p><p>⚠ Qui nasce la race condition di M5, domanda 7.</p>', data: MAP({ __type: 'account', uid: 'sR4x9' }, { __type: 'sessione' }, '⏳ due scritture in gara', U, 'SIGN IN') },
+    { title: 'setCurrentUser → re-render', on: ['prov', 'nav'], hot: ['w-ctx'], dataLabel: 'Mappa degli stati', text: '<p>Il Provider trasmette il nuovo value, e Navigation mostra SIGN OUT.</p>', data: MAP({ __type: 'account', uid: 'sR4x9' }, { __type: 'sessione' }, '⏳', U, 'SIGN OUT') },
+    { title: 'Il form crea il documento (forse)', on: ['form', 'fs'], hot: ['w-doc'], dataLabel: 'Mappa degli stati', text: '<p>Il form chiama <code>createUserDocumentFromAuth(user, { displayName: \'Sara\' })</code>. Se il listener ha già scritto, <code>exists()</code> è true e il nome <b>non</b> viene salvato. L\'esito dipende da chi arriva prima.</p>', data: MAP({ __type: 'account' }, { __type: 'sessione' }, { displayName: 'Sara oppure null ⚠', email: 'sara@mail.it' }, U, 'SIGN OUT') },
+  ] },
+  refresh: { label: '2 · Refresh', steps: [
+    { title: 'F5: la memoria si azzera', on: ['prov', 'nav'], dataLabel: 'Mappa degli stati', text: '<p>React riparte da zero: <code>currentUser = null</code>. Ma IndexedDB e i server ricordano tutto.</p>', data: MAP({ __type: 'account' }, { __type: 'sessione', uid: 'sR4x9' }, FSDOC, null, 'SIGN IN ⚠ (lampo)') },
+    { title: 'L\'SDK rilegge la sessione', on: ['sdk', 'idb'], hot: ['w-idb'], dataLabel: 'Mappa degli stati', text: '<p>In modo asincrono, l\'SDK ripristina l\'utente da IndexedDB (e se serve rinnova il token con il server).</p>', data: MAP({ __type: 'account' }, { __type: 'sessione' }, FSDOC, null, 'SIGN IN ⚠') },
+    { title: 'Callback con Sara', on: ['sdk', 'prov', 'fs'], hot: ['w-cb', 'w-doc'], dataLabel: 'Mappa degli stati', text: '<p>Il listener riceve Sara. <code>createUserDocumentFromAuth</code>: il documento esiste già, quindi 1 lettura e 0 scritture (idempotenza, M3).</p>', data: MAP({ __type: 'account' }, { __type: 'sessione' }, FSDOC, U, 'SIGN IN ⚠') },
+    { title: 'SIGN OUT', on: ['prov', 'nav'], hot: ['w-ctx'], dataLabel: 'Mappa degli stati', text: '<p>Tutto allineato. Il "lampo" tra il primo passo e questo è il difetto che <code>isAuthLoading</code> (M5 E3) elimina.</p>', data: MAP({ __type: 'account' }, { __type: 'sessione' }, FSDOC, U, 'SIGN OUT') },
+  ] },
+  out: { label: '3 · Sign out', steps: [
+    { title: 'Click su SIGN OUT', on: ['nav', 'sdk'], hot: ['w-out'], dataLabel: 'Mappa degli stati', text: '<p><code>signOutUser()</code>. Navigation non tocca lo state: ci pensa il listener.</p>', data: MAP({ __type: 'account' }, { __type: 'sessione' }, FSDOC, U, 'SIGN OUT') },
+    { title: 'Sessione cancellata', on: ['sdk', 'idb'], hot: ['w-idb'], dataLabel: 'Mappa degli stati', text: '<p>L\'SDK cancella la sessione da IndexedDB. Account e profilo sul server <b>restano</b>: il logout non cancella niente sul server.</p>', data: MAP({ __type: 'account' }, null, FSDOC, U, 'SIGN OUT') },
+    { title: 'Callback con null → SIGN IN', on: ['sdk', 'prov', 'nav'], hot: ['w-cb', 'w-ctx'], dataLabel: 'Mappa degli stati', text: '<p><code>if (user)</code> è falso, quindi nessun documento. <code>setCurrentUser(null)</code> e Navigation mostra SIGN IN. Se c\'è un carrello, il boss di M5 lo svuota qui.</p>', data: MAP({ __type: 'account' }, null, FSDOC, null, 'SIGN IN') },
+  ] },
+} });
+
+Lab.quiz('#q1', { id: 'm6-q1', question: 'Sara fa logout. Cosa resta?',
+  options: [ { t: 'Niente: account e profilo vengono cancellati', why: '<span class="step">Il logout chiude solo la <b>sessione</b> nel browser. Account e documento restano sul server.</span>' }, { t: 'Account Auth e documento Firestore; spariscono la sessione in IndexedDB e currentUser in React', ok: true }, { t: 'Solo la sessione in IndexedDB', why: '<span class="step">È proprio la sessione che il logout cancella.</span>' } ] });
+Lab.quiz('#q2', { id: 'm6-q2', question: 'Sara apre il sito su un altro computer. Cosa trova?',
+  options: [ { t: 'È già loggata', why: '<span class="step">La sessione vive nell\'IndexedDB del primo browser. Un altro dispositivo ha un IndexedDB vuoto.</span>' }, { t: 'Deve rifare il login; poi il listener trova il documento esistente (nessuna nuova scrittura)', ok: true, why: '<span class="step">Account e profilo sono sul server, la sessione è locale. È la tabella della sezione ②, colonna per colonna.</span>' }, { t: 'Deve registrarsi di nuovo', why: '<span class="step">L\'account esiste sul server Auth: basta il login.</span>' } ] });
+Lab.quiz('#q3', { id: 'm6-q3', question: 'Un utente segnala: "Vedo SIGN OUT, ma in Firestore il mio documento non c\'è". Dove guardi per primo?',
+  options: [ { t: 'Nel codice di Navigation', why: '<span class="step">Navigation mostra correttamente lo stato di Auth. Il dato mancante è in Firestore: risali a <b>chi scrive</b> quel documento.</span>' }, { t: 'Nella console del browser cerco l\'errore di <code>createUserDocumentFromAuth</code> (viene solo loggato), poi controllo le Security Rules', ok: true, why: '<span class="step">Metodo: localizza il posto sbagliato (Firestore), risali a chi lo scrive (la funzione), e scopri che il suo catch "ingoia" l\'errore (M3 q10). Il log è l\'unica traccia rimasta.</span>' }, { t: 'Svuoto IndexedDB e riprovo', why: '<span class="step">Può far sparire il sintomo, ma non ti dice la causa. E il problema si ripresenterà.</span>' } ] });
+Lab.quiz('#q4', { id: 'm6-q4', question: 'Perché nessun componente form importa <code>UserContext</code> nella versione finale (lezione 11)?',
+  options: [ { t: 'È una dimenticanza del corso', why: '<span class="step">È una scelta: rileggi M5 ⑥, il confronto tra v1 e v2.</span>' }, { t: 'Perché lo stato di login si sincronizza tramite il listener: i form agiscono su Firebase, e React si allinea da solo', ok: true }, { t: 'Perché useContext non funziona nei form', why: '<span class="step">useContext funziona in qualsiasi componente sotto il Provider.</span>' } ] });
+Lab.quiz('#q5', { id: 'm6-q5', type: 'order', question: 'Ordina il metodo di debug:',
+  items: ['Riprodurre il bug in modo affidabile', 'Individuare quale dei 4 posti ha il dato sbagliato', 'Risalire a chi scrive quel dato', 'Verificare un\'ipotesi alla volta', 'Generalizzare: quale idea sbagliata, dove altro?'],
+  why: 'Partire dall\'ipotesi senza aver localizzato il problema è "tirare a indovinare".', explain: ['Il passo 5 è quello che ti fa crescere: un bug capito ne previene altri dieci.'] });
+Lab.quizScore('#score');
+Lab.exercises('#ex-list', 'm6');
+</script>
+</body>
+</html>

@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>M4 · Form controllati</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .live { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .live label { display: block; font-size: 13px; color: var(--muted); margin-top: 8px; }
+  .live input { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); font: 15px var(--font); }
+  .live .log { font: 12.5px/1.6 var(--mono); max-height: 220px; overflow: auto; background: var(--surface-2); border-radius: 8px; padding: 8px 10px; }
+  .live .log div { border-bottom: 1px dashed var(--line); padding: 2px 0; }
+  @media (max-width: 760px) { .live { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body data-root=".." data-module="m4">
+<div class="lab">
+<nav class="lab-nav" id="lab-nav"></nav>
+<main class="lab-main">
+
+<div class="kicker">Modulo 4 · Form controllati</div>
+<h1>Il form come riflesso dello state</h1>
+<p class="lead">Ogni tasto premuto fa un giro completo: evento → handler → nuovo state → re-render → input aggiornato. Capire questo giro è ciò che separa "il form funziona" da "so perché funziona".</p>
+<ul class="toc">
+  <li><a href="#problema">① Il problema</a></li><li><a href="#teoria">② Teoria</a></li><li><a href="#modello">③ Modello mentale</a></li><li><a href="#flusso">④ Flusso + laboratorio</a></li><li><a href="#dati">⑤ Forma dei dati</a></li><li><a href="#codice">⑥ Nel tuo codice</a></li><li><a href="#componenti">⑦ Nei componenti</a></li><li><a href="#documentazione">⑧ Doc ufficiale</a></li><li><a href="#errori">⑨ Errori tipici</a></li><li><a href="#verifica">⑩ Verifica</a></li><li><a href="#esercizi">⑪ Esercizi</a></li>
+</ul>
+
+<h2 id="problema"><span class="section-num">1</span>Il problema: due fonti di verità</h2>
+<p>Un <code>&lt;input&gt;</code> HTML ha già un suo stato: il testo che contiene, gestito dal browser. Se anche React tiene una copia di quel testo, ci sono <b>due</b> versioni dello stesso dato. Quale vince? Un <dfn data-term="controlled">componente controllato</dfn> risolve il conflitto in modo netto: <b>React è l'unica fonte di verità</b>, e l'input mostra sempre e solo ciò che c'è nello state.</p>
+
+<h2 id="teoria"><span class="section-num">2</span>Teoria e terminologia</h2>
+<div class="table-wrap"><table>
+<tr><th></th><th>Controllato</th><th>Non controllato</th></tr>
+<tr><td>Chi ha il valore</td><td>lo state React</td><td>il DOM</td></tr>
+<tr><td>Props</td><td><code>value</code> + <code>onChange</code></td><td><code>defaultValue</code> (opzionale) + <code>ref</code> per leggerlo</td></tr>
+<tr><td>Validazione mentre si scrive</td><td>facile: hai sempre il valore</td><td>scomoda</td></tr>
+<tr><td>Reset</td><td><code>setFormFields(default)</code></td><td><code>form.reset()</code></td></tr>
+<tr><td>Nel corso</td><td>✔</td><td>—</td></tr>
+</table></div>
+<h3>I pezzi del tuo form</h3>
+<ul>
+  <li><b>Uno state a oggetto</b> per tutti i campi: <code>{ displayName, email, password, confirmPassword }</code>.</li>
+  <li><b>Un solo handler</b> per tutti gli input: legge <code>event.target.name</code> e aggiorna <b>quella</b> chiave con una computed property (M0).</li>
+  <li><b>L'attributo <code>name</code></b> di ogni input deve essere <b>uguale</b> alla chiave nello state: è il "cavo" che li collega.</li>
+  <li><b>Il submit</b> arriva su <code>&lt;form onSubmit&gt;</code> (non sul click del bottone). <code>event.preventDefault()</code> impedisce al browser di ricaricare la pagina.</li>
+  <li><b><code>required</code>, <code>type="email"</code></b>: validazione nativa del browser, che blocca il submit prima che parta il tuo handler.</li>
+  <li><b>Evento sintetico</b>: React ti passa un <code>SyntheticEvent</code> che avvolge quello nativo. Da React 17 non c'è più l'"event pooling": puoi leggere <code>event.target</code> anche dopo un <code>await</code>. Le buone abitudini però restano: estrai subito ciò che ti serve.</li>
+</ul>
+
+<h2 id="modello"><span class="section-num">3</span>Modello mentale: lo specchio</h2>
+<div class="card analogy"><div class="icon">🪞</div><div>
+L'input è uno <b>specchio</b> dello state. Quando premi un tasto, non stai scrivendo nello specchio: stai <b>chiedendo</b> a React di cambiare l'originale (lo state). React cambia l'originale, ridisegna, e lo specchio mostra il nuovo riflesso. Se l'handler non aggiorna lo state, lo specchio mostra di nuovo il vecchio riflesso: <b>sembra che la tastiera non funzioni</b>.
+</div></div>
+<div class="card">
+<svg class="diagram" viewBox="0 0 900 190" role="img" aria-label="Ciclo dell'input controllato">
+  <defs><marker id="m4a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" style="fill:var(--accent)"/></marker></defs>
+  <g font-size="13">
+    <rect class="box auth" x="20" y="60" width="150" height="70" rx="35"/><text x="95" y="92" text-anchor="middle" font-weight="700">⌨️ tasto "L"</text><text x="95" y="112" text-anchor="middle" font-size="11" class="muted">evento DOM</text>
+    <rect class="box" x="200" y="60" width="160" height="70" rx="35" style="stroke:var(--accent)"/><text x="280" y="92" text-anchor="middle" font-weight="700">handleChange</text><text x="280" y="112" text-anchor="middle" font-size="11" class="mono">name, value</text>
+    <rect class="box react" x="390" y="60" width="160" height="70" rx="35"/><text x="470" y="92" text-anchor="middle" font-weight="700" class="t-react">setFormFields</text><text x="470" y="112" text-anchor="middle" font-size="11" class="mono">{...f, [name]: value}</text>
+    <rect class="box react" x="580" y="60" width="140" height="70" rx="35"/><text x="650" y="92" text-anchor="middle" font-weight="700" class="t-react">re-render</text><text x="650" y="112" text-anchor="middle" font-size="11" class="muted">nuova fotografia</text>
+    <rect class="box fs" x="750" y="60" width="130" height="70" rx="35"/><text x="815" y="92" text-anchor="middle" font-weight="700" class="t-fs">value="L"</text><text x="815" y="112" text-anchor="middle" font-size="11" class="muted">input aggiornato</text>
+  </g>
+  <path class="wire flow" d="M170 95 H198" marker-end="url(#m4a)" style="stroke:var(--accent)"/>
+  <path class="wire flow" d="M360 95 H388" marker-end="url(#m4a)" style="stroke:var(--accent)"/>
+  <path class="wire flow" d="M550 95 H578" marker-end="url(#m4a)" style="stroke:var(--accent)"/>
+  <path class="wire flow" d="M720 95 H748" marker-end="url(#m4a)" style="stroke:var(--accent)"/>
+  <path class="wire" d="M815 130 V165 H95 V132" marker-end="url(#m4a)" style="stroke:var(--accent);stroke-dasharray:4 4"/>
+  <text x="450" y="182" text-anchor="middle" font-size="12" class="muted">il prossimo tasto riparte dal valore NUOVO</text>
+</svg>
+</div>
+
+<h2 id="flusso"><span class="section-num">4</span>Flusso animato e laboratorio</h2>
+<template id="svg-key">
+<svg class="diagram" viewBox="0 0 900 200" role="img" aria-label="Componenti del form">
+  <g data-node="dom"><rect class="box auth" x="20" y="60" width="150" height="80" rx="10"/><text x="95" y="92" text-anchor="middle" font-weight="700">&lt;input&gt; DOM</text><text x="95" y="114" text-anchor="middle" font-size="11" class="mono">name="email"</text></g>
+  <g data-node="fi"><rect class="box react" x="210" y="60" width="170" height="80" rx="10"/><text x="295" y="92" text-anchor="middle" font-weight="700" class="t-react">FormInput</text><text x="295" y="114" text-anchor="middle" font-size="11" class="mono">{label, ...otherProps}</text></g>
+  <g data-node="form"><rect class="box react" x="420" y="30" width="220" height="140" rx="10"/><text x="530" y="56" text-anchor="middle" font-weight="700" class="t-react">SignUpForm</text><text x="435" y="84" font-size="11.5" class="mono">state: formFields</text><text x="435" y="106" font-size="11.5" class="mono">handleChange()</text><text x="435" y="128" font-size="11.5" class="mono">handleSubmit()</text></g>
+  <g data-node="react"><rect class="box" x="680" y="60" width="200" height="80" rx="10" style="stroke:var(--warn)"/><text x="780" y="92" text-anchor="middle" font-weight="700">React</text><text x="780" y="114" text-anchor="middle" font-size="11" class="muted">confronta, ridisegna</text></g>
+  <path data-node="w1" data-flow class="wire wire-auth" d="M170 90 H208"/>
+  <path data-node="w2" data-flow class="wire wire-react" d="M380 90 H418"/>
+  <path data-node="w3" data-flow class="wire" d="M640 100 H678" style="stroke:var(--warn)"/>
+  <path data-node="w4" data-flow class="wire wire-react" d="M680 125 C 600 190 300 190 210 125"/>
+  <path data-node="w5" data-flow class="wire wire-react" d="M210 110 H172"/>
+</svg>
+</template>
+<pre class="code" id="code-key" hidden>const SignUpForm = () => {
+  const [formFields, setFormFields] = useState(defaultFormFields);
+  const { displayName, email, password, confirmPassword } = formFields;
+
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+    setFormFields({ ...formFields, [name]: value });
+  };
+
+  return (
+    &lt;FormInput label='Email' type='email' required
+      onChange={handleChange} name='email' value={email} />
+  );
+};
+
+const FormInput = ({ label, ...otherProps }) => (
+  &lt;div className='group'>
+    &lt;input className='form-input' {...otherProps} />
+    {label && (&lt;label className={`${otherProps.value.length ? 'shrink' : ''} form-input-label`}>{label}&lt;/label>)}
+  &lt;/div>
+);</pre>
+<div id="flow"></div>
+
+<h3>Laboratorio: guarda il ciclo dal vivo</h3>
+<p>Questo è un vero input controllato, scritto in JavaScript puro con la stessa logica. A sinistra scrivi, a destra vedi ogni passaggio. Prova anche il toggle "bug": l'handler dimentica di aggiornare lo state.</p>
+<div class="card live">
+  <div>
+    <label>email (controllato)</label><input id="lab-email" name="email" autocomplete="off">
+    <label>password (controllato)</label><input id="lab-pw" name="password" type="password" autocomplete="off">
+    <label style="display:flex;gap:6px;align-items:center;margin-top:14px"><input type="checkbox" id="lab-bug" style="width:auto"> simula il bug: handleChange non chiama setFormFields</label>
+    <div style="margin-top:10px"><b>formFields:</b><div id="lab-state" class="insp"></div></div>
+  </div>
+  <div><b>Registro degli eventi</b> <span style="font-size:12px;color:var(--muted)">(l'ultimo in alto)</span><div class="log" id="lab-log"></div></div>
+</div>
+
+<h2 id="dati"><span class="section-num">5</span>Forma dei dati</h2>
+<div class="grid-2">
+  <div class="card"><b>Props ricevute da FormInput</b><div id="insp-props" style="margin-top:8px"></div></div>
+  <div class="card"><b>formFields</b> prima e dopo il tasto "o"<div id="insp-ff" style="margin-top:8px"></div></div>
+</div>
+
+<h2 id="codice"><span class="section-num">6</span>Nel tuo codice: FormInput e Button</h2>
+<div class="annot">
+<pre class="code">const FormInput = ({ label, ...otherProps }) => {
+  return (
+    &lt;div className='group'>
+      &lt;input className='form-input' {...otherProps} />
+      {label && (
+        &lt;label
+          className={`${
+            otherProps.value.length ? 'shrink' : ''
+          } form-input-label`}
+        >
+          {label}
+        &lt;/label>
+      )}
+    &lt;/div>
+  );
+};
+
+const BUTTON_TYPE_CLASSES = {
+  google: 'google-sign-in',
+  inverted: 'inverted',
+};
+
+const Button = ({ children, buttonType, ...otherProps }) => {
+  return (
+    &lt;button
+      className={`button-container ${BUTTON_TYPE_CLASSES[buttonType]}`}
+      {...otherProps}
+    >
+      {children}
+    &lt;/button>
+  );
+};</pre>
+<ol>
+  <li data-lines="1"><b>Rest</b>: <code>label</code> serve al componente, tutto il resto è per l'<code>&lt;input&gt;</code>.</li>
+  <li data-lines="4"><b>Spread delle props</b>: <code>value</code>, <code>onChange</code>, <code>name</code>, <code>type</code>, <code>required</code> arrivano all'input DOM. FormInput è "trasparente".</li>
+  <li data-lines="5"><b>Render condizionale</b>: <code>{label &amp;&amp; …}</code> mostra la label solo se c'è.</li>
+  <li data-lines="8"><b>Attenzione</b>: <code>otherProps.value.length</code> presuppone che <code>value</code> esista. Un FormInput senza <code>value</code> va in crash: <code>Cannot read properties of undefined (reading 'length')</code>.</li>
+  <li data-lines="7-9"><b>La label "shrink"</b>: se c'è testo, la label si rimpicciolisce e sale. È uno stile <b>derivato</b> dallo state, senza state aggiuntivo.</li>
+  <li data-lines="17-20"><b>Mappa tipo → classe</b>: un oggetto al posto di un if/else.</li>
+  <li data-lines="22,25"><b>Il dettaglio da dev</b>: senza <code>buttonType</code>, <code>BUTTON_TYPE_CLASSES[undefined]</code> vale <code>undefined</code>, quindi la classe diventa <code>"button-container undefined"</code>. Non rompe niente, ma nel DOM finisce una classe chiamata "undefined".</li>
+  <li data-lines="27"><b>children</b>: il testo tra <code>&lt;Button&gt;</code> e <code>&lt;/Button&gt;</code>.</li>
+</ol>
+</div>
+
+<h2 id="componenti"><span class="section-num">7</span>Nei componenti: chi passa cosa</h2>
+<div class="table-wrap"><table>
+<tr><th>Dato</th><th>Nasce in</th><th>Passa per</th><th>Arriva a</th></tr>
+<tr><td><code>email</code> (valore)</td><td>state di SignUpForm</td><td>prop <code>value</code> di FormInput</td><td>attributo <code>value</code> dell'input DOM, e <code>value.length</code> per la label</td></tr>
+<tr><td><code>handleChange</code></td><td>SignUpForm</td><td>prop <code>onChange</code> di FormInput</td><td>listener dell'input DOM</td></tr>
+<tr><td>il tasto premuto</td><td>DOM</td><td><code>event.target.value</code></td><td>state di SignUpForm (risale)</td></tr>
+<tr><td><code>handleSubmit</code></td><td>SignUpForm</td><td><code>&lt;form onSubmit&gt;</code></td><td>scatta al click di <code>&lt;Button type="submit"&gt;</code> o con Invio</td></tr>
+</table></div>
+<div class="callout"><span class="title">"I dati scendono, gli eventi salgono"</span>
+I <b>valori</b> scendono come props (SignUpForm → FormInput → DOM). I <b>cambiamenti</b> risalgono come chiamate di funzione (DOM → onChange → handleChange del genitore). FormInput non possiede niente: è un componente "di presentazione". È la stessa direzione dei dati di Context (M5), solo su distanze più corte.</div>
+
+<h2 id="documentazione"><span class="section-num">8</span>Documentazione ufficiale ↔ corso</h2>
+<div class="grid-2">
+<div><p><span class="pill react">DOC</span> <a href="https://react.dev/reference/react-dom/components/input" target="_blank" rel="noopener">react.dev › &lt;input&gt; › Controlling an input with a state variable</a></p>
+<pre class="code">function Form() {
+  const [firstName, setFirstName] = useState(''); // Declare a state variable...
+  // ...
+  return (
+    &lt;input
+      value={firstName} // ...force the input's value to match the state variable...
+      onChange={e => setFirstName(e.target.value)} // ... and update the state variable on any edits!
+    />
+  );
+}</pre></div>
+<div><p><span class="pill react">CORSO</span> (generalizzato a N campi)</p>
+<pre class="code">const [formFields, setFormFields] = useState(defaultFormFields);
+
+const handleChange = (event) => {
+  const { name, value } = event.target;
+  setFormFields({ ...formFields, [name]: value });
+};
+
+&lt;FormInput name='email' value={email} onChange={handleChange} />
+&lt;FormInput name='password' value={password} onChange={handleChange} /></pre></div>
+</div>
+<p>Tabella di traduzione: <b>uno state per campo</b> (doc) → <b>uno state a oggetto</b> (corso); <b>un handler inline per campo</b> → <b>un handler unico</b> che usa <code>name</code>; <code>setFirstName(e.target.value)</code> → <code>{ ...formFields, [name]: value }</code>.</p>
+<h3>Troubleshooting della doc: due errori che vedrai</h3>
+<ul>
+  <li><b>value senza onChange</b>: la doc spiega che, se passi <code>value</code> senza <code>onChange</code>, è impossibile scrivere nell'input, e in console compare un avviso su un campo che diventerebbe "read-only".</li>
+  <li><b>"A component is changing an uncontrolled input to be controlled"</b>: la doc dice che un input controllato deve ricevere <b>sempre</b> una stringa, mai <code>null</code> o <code>undefined</code>, e suggerisce <code>value={someValue ?? ''}</code>. Succede, per esempio, se il default dello state non ha tutte le chiavi.</li>
+</ul>
+
+<h2 id="errori"><span class="section-num">9</span>Errori tipici</h2>
+<div class="card"><h3 style="margin-top:0">❶ name diverso dalla chiave dello state</h3>
+<pre class="code">&lt;FormInput name='mail' value={email} onChange={handleChange} /></pre>
+<p><b>Passo per passo:</b> scrivi "a" → <code>name = 'mail'</code> → <code>{ ...formFields, mail: 'a' }</code> → <code>email</code> resta '' → l'input mostra '' → <b>sembra che la tastiera non funzioni</b>. Intanto lo state si riempie di una chiave <code>mail</code> che nessuno legge.</p>
+<div class="grid-2"><div class="callout bad"><span class="title">Modello sbagliato</span>"L'input è collegato al suo value."</div><div class="callout good"><span class="title">Modello giusto</span>"L'input <b>legge</b> da <code>value</code> e <b>scrive</b> tramite <code>name</code>. Devono indicare la stessa chiave."</div></div></div>
+<div class="card"><h3 style="margin-top:0">❷ Modificare lo state sul posto</h3>
+<pre class="code">formFields[name] = value;
+setFormFields(formFields);   // stesso riferimento → nessun re-render</pre></div>
+<div class="card"><h3 style="margin-top:0">❸ Aggiornamenti rapidi con lo state "vecchio"</h3>
+<pre class="code">setFormFields({ ...formFields, email: 'a' });
+setFormFields({ ...formFields, password: 'b' });   // sovrascrive: email torna vecchia!</pre>
+<p>Entrambe le chiamate partono dalla <b>stessa fotografia</b> (M0). La seconda non vede la prima. Soluzione: la forma funzionale, <code>setFormFields((prev) =&gt; ({ ...prev, [name]: value }))</code>.</p></div>
+<div class="card"><h3 style="margin-top:0">❹ onClick sul bottone invece di onSubmit sul form</h3>
+<p>Con <code>onClick</code> sul bottone perdi l'invio con il tasto Invio e la validazione nativa (<code>required</code>, <code>type="email"</code>). Il submit è un evento del <b>form</b>.</p></div>
+<div class="card"><h3 style="margin-top:0">❺ Il bottone Google che invia il form</h3>
+<p>Dentro un <code>&lt;form&gt;</code>, un <code>&lt;button&gt;</code> senza <code>type</code> è <b>type="submit"</b> di default. Per questo il tuo bottone Google ha <code>type='button'</code>: senza, il click partirebbe anche come submit del login con email.</p></div>
+
+<h2 id="verifica"><span class="section-num">10</span>Verifica</h2>
+<div class="callout" id="score"></div>
+<div id="q1"></div><div id="q2"></div><div id="q3"></div>
+<h3>Domande da dev</h3>
+<div id="q4"></div><div id="q5"></div><div id="q6"></div><div id="q7"></div>
+
+<h2 id="esercizi"><span class="section-num">11</span>Esercizi</h2>
+<div id="ex-list"></div>
+<div class="footer-nav"><a class="btn" href="m3-firestore.html">← M3</a><a class="btn" href="m5-context.html">M5 Context →</a></div>
+</main>
+</div>
+<script src="../assets/manifest.js"></script>
+<script src="../assets/registro.js"></script>
+<script src="../assets/glossario.js"></script>
+<script src="../assets/app.js"></script>
+<script>
+Lab.renderInspector(document.getElementById('insp-props'), { label: 'Email', otherProps: { type: 'email', required: true, onChange: 'ƒ handleChange(event)', name: 'email', value: 'le' } });
+Lab.renderInspector(document.getElementById('insp-ff'), { prima: { displayName: 'Leo', email: 'le', password: '', confirmPassword: '' }, dopo: { __type: 'Object (NUOVO)', displayName: 'Leo', '~email': 'leo', password: '', confirmPassword: '' } });
+
+Lab.stepper('#flow', { title: 'Un tasto: "o" nel campo email', svg: '#svg-key', code: '#code-key', steps: [
+  { title: 'Il browser genera l\'evento', on: ['dom', 'fi'], hot: ['w1'], lines: [18], dataLabel: 'event.target', text: '<p>Il campo mostrava "le". Premi "o". Il DOM avrebbe già "leo", ma React intercetta l\'evento <b>prima</b> di decidere cosa mostrare.</p>', data: { 'event.target.name': 'email', 'event.target.value': 'leo' } },
+  { title: 'onChange risale al genitore', on: ['fi', 'form'], hot: ['w2'], lines: [[11, 12], [5, 6]], dataLabel: 'Destructuring', text: '<p>FormInput non ha un handler suo: <code>onChange</code> è arrivato dentro <code>...otherProps</code> ed è <code>handleChange</code> di SignUpForm. Il destructuring estrae <code>name</code> e <code>value</code>.</p>', data: { name: 'email', value: 'leo' } },
+  { title: 'Nuovo oggetto state', on: ['form'], lines: [7], dataLabel: 'Argomento di setFormFields', text: '<p>Spread (copia di tutte le chiavi), poi <code>[name]</code> diventa <code>email</code> e sovrascrive. Viene creato un oggetto <b>nuovo</b>: <code>formFields</code> del render attuale <b>non cambia</b>.</p>', data: { displayName: 'Leo', '~email': 'leo', password: '', confirmPassword: '' } },
+  { title: 'React confronta e ridisegna', on: ['form', 'react'], hot: ['w3'], lines: [2, 3], dataLabel: 'Nuovo render', text: '<p>Oggetto nuovo vuol dire "è cambiato", quindi re-render di SignUpForm: <code>useState</code> restituisce l\'oggetto nuovo e il destructuring dà <code>email = \'leo\'</code>.</p>', data: { 'Object.is(vecchio, nuovo)': false, email: 'leo' } },
+  { title: 'FormInput riceve il nuovo value', on: ['react', 'fi', 'dom'], hot: ['w4', 'w5'], lines: [[11, 12], 18, 19], dataLabel: 'Risultato', text: '<p>FormInput fa re-render (il genitore l\'ha ridisegnato), e l\'input DOM riceve <code>value="leo"</code>. La label ha <code>value.length = 3</code>, quindi la classe è <code>shrink</code>.</p><p>Tutti e quattro i FormInput fanno re-render, anche quelli che non sono cambiati: per un form è irrilevante.</p>', data: { 'input.value': 'leo', 'label className': 'shrink form-input-label' } },
+] });
+
+/* laboratorio live */
+(() => {
+  let state = { email: '', password: '' }; let render = 0;
+  const log = document.getElementById('lab-log'), st = document.getElementById('lab-state'), bug = document.getElementById('lab-bug');
+  const inputs = { email: document.getElementById('lab-email'), password: document.getElementById('lab-pw') };
+  const add = (html) => { const d = document.createElement('div'); d.innerHTML = html; log.prepend(d); };
+  const paint = () => { render++; inputs.email.value = state.email; inputs.password.value = state.password; Lab.renderInspector(st, state); add(`<b>render #${render}</b> → input.value = "${state.email}" / "${'•'.repeat(state.password.length)}"`); };
+  Object.values(inputs).forEach((el) => el.addEventListener('input', (e) => {
+    const { name, value } = e.target;
+    add(`onChange: name="${name}" value="${name === 'password' ? '•'.repeat(value.length) : value}"`);
+    if (bug.checked) { add('<span style="color:var(--bad)">handleChange NON aggiorna lo state</span>'); paint(); return; }
+    const next = { ...state, [name]: value };
+    add(`setFormFields({ ...formFields, ${name}: … }) → oggetto nuovo: ${next !== state}`);
+    state = next; paint();
+  }));
+  paint();
+})();
+
+Lab.quiz('#q1', { id: 'm4-q1', question: 'Cosa collega un FormInput alla chiave giusta dello state quando l\'utente scrive?',
+  options: [ { t: 'La prop <code>value</code>', why: '<span class="step"><code>value</code> serve a <b>leggere</b> (state → input). Per scrivere, l\'handler usa <code>event.target.name</code>.</span>' }, { t: 'L\'attributo <code>name</code>', ok: true, why: '<span class="step"><code>handleChange</code> legge <code>name</code> e lo usa come chiave. Per questo name e chiave devono coincidere.</span>' }, { t: 'La prop <code>label</code>', why: '<span class="step">label è solo testo da mostrare: non arriva nemmeno all\'input (rest).</span>' } ] });
+Lab.quiz('#q2', { id: 'm4-q2', question: 'Perché <code>event.preventDefault()</code> in handleSubmit?',
+  options: [ { t: 'Per non far scattare la validazione', why: '<span class="step">La validazione nativa avviene <b>prima</b> dell\'evento submit. Se fallisce, il tuo handler non viene nemmeno chiamato.</span>' }, { t: 'Perché il comportamento predefinito di un form è inviare i dati e ricaricare la pagina, distruggendo lo state di React', ok: true }, { t: 'Per evitare che l\'evento arrivi al genitore', why: '<span class="step">Quello è <code>stopPropagation()</code>. Sono due cose diverse.</span>' } ] });
+Lab.quiz('#q3', { id: 'm4-q3', question: 'Nel tuo Button, senza <code>buttonType</code>, che classe finisce nel DOM?',
+  options: [ { t: '<code>"button-container"</code>', why: '<span class="step">Il template string interpola sempre <code>${…}</code>: <code>BUTTON_TYPE_CLASSES[undefined]</code> è <code>undefined</code>, che diventa il testo "undefined".</span>' }, { t: '<code>"button-container undefined"</code>', ok: true, why: '<span class="step">Correzione semplice: <code>${BUTTON_TYPE_CLASSES[buttonType] ?? \'\'}</code>. Il corso, più avanti, aggiunge una classe "base" come default.</span>' }, { t: 'Errore: chiave inesistente', why: '<span class="step">Leggere una chiave inesistente di un oggetto non lancia errori: restituisce undefined.</span>' } ] });
+Lab.quiz('#q4', { id: 'm4-q4', question: 'Lo state di default è <code>{ email: \'\' }</code> ma il form ha anche <code>&lt;FormInput name="password" value={formFields.password} …/&gt;</code>. Cosa succede?',
+  options: [ { t: 'Niente di strano', why: '<span class="step"><code>formFields.password</code> vale <code>undefined</code>, e il tuo FormInput legge <code>otherProps.value.length</code>.</span>' }, { t: 'Crash al primo render: <code>Cannot read properties of undefined (reading \'length\')</code> dentro FormInput', ok: true, why: '<span class="step">Prima ancora dell\'avviso "uncontrolled → controlled", il tuo FormInput va in crash. Due lezioni: il default dello state deve avere <b>tutte</b> le chiavi, e un componente riutilizzabile deve difendersi (<code>value?.length</code>, oppure <code>value ?? \'\'</code>).</span>' }, { t: 'Solo l\'avviso "uncontrolled to controlled"', why: '<span class="step">Con un input semplice sarebbe così. Ma il tuo FormInput accede a <code>.length</code> di undefined, e prima ancora c\'è un crash.</span>' } ] });
+Lab.quiz('#q5', { id: 'm4-q5', question: 'Un autocompletamento del browser riempie <b>email e password insieme</b>, scatenando due onChange nello stesso istante, prima di un nuovo render. Con <code>setFormFields({ ...formFields, [name]: value })</code> cosa rischi?',
+  options: [ { t: 'Niente: React li applica in ordine', why: '<span class="step">React li applica in ordine, ma il <b>contenuto</b> di ciascuno è stato calcolato dalla stessa fotografia vecchia: il secondo sovrascrive il primo con l\'email ancora vuota.</span>' }, { t: 'Di perdere uno dei due valori: la soluzione è <code>setFormFields((prev) =&gt; ({ ...prev, [name]: value }))</code>', ok: true, why: '<span class="step">La forma funzionale riceve lo state <b>più recente in coda</b>, non quello della fotografia. È la regola: se il nuovo state dipende dal precedente, usa una funzione.</span>' }, { t: 'Un ciclo infinito', why: '<span class="step">Due set non creano un ciclo: il problema è la perdita di un dato.</span>' } ] });
+Lab.quiz('#q6', { id: 'm4-q6', question: 'Perché <code>required</code> negli input non basta come validazione?',
+  options: [ { t: 'Basta: il browser blocca il submit', why: '<span class="step">Blocca il submit <b>dal form</b>. Chiunque può chiamare le API (Auth, Firestore) senza passare dal tuo form.</span>' }, { t: 'Perché è solo UX: la validazione vera va fatta dove non si può aggirare, cioè sul server (Auth, Security Rules)', ok: true, why: '<span class="step">Tre livelli: il browser (comodità), il tuo codice (messaggi chiari), il server (sicurezza). Solo l\'ultimo è obbligatorio per la sicurezza. Gli altri due servono all\'esperienza utente.</span>' }, { t: 'Perché non funziona con type="password"', why: '<span class="step">Funziona con ogni tipo di input testuale.</span>' } ] });
+Lab.quiz('#q7', { id: 'm4-q7', type: 'order', question: 'Ordina dal tasto premuto all\'input aggiornato:',
+  items: ['evento input nel DOM', 'onChange di FormInput (= handleChange)', 'destructuring di event.target', 'setFormFields con un oggetto nuovo', 're-render di SignUpForm', 'FormInput riceve il nuovo value'],
+  why: 'Gli eventi salgono (DOM → genitore), i dati scendono (state → props → DOM).', explain: ['Se in un form "la tastiera non funziona", percorri questa catena e trova l\'anello rotto.'] });
+Lab.quizScore('#score');
+Lab.exercises('#ex-list', 'm4');
+</script>
+</body>
+</html>

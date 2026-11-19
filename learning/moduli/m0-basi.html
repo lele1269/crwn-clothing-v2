@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>M0 · Basi utili</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-root=".." data-module="m0">
+<div class="lab">
+<nav class="lab-nav" id="lab-nav"></nav>
+<main class="lab-main">
+
+<div class="kicker">Modulo 0 · JavaScript che React dà per scontato</div>
+<h1>Le quattro idee che reggono tutto il resto</h1>
+<p class="lead">Riferimenti, destructuring e spread, funzioni come valori, codice asincrono, più il ciclo di render di React. Quasi ogni bug dei moduli successivi nasce da una di queste idee capita a metà.</p>
+<ul class="toc">
+  <li><a href="#problema">① Il problema</a></li>
+  <li><a href="#teoria">② Teoria</a></li>
+  <li><a href="#modello">③ Modello mentale</a></li>
+  <li><a href="#flusso">④ Flussi animati</a></li>
+  <li><a href="#dati">⑤ Forma dei dati</a></li>
+  <li><a href="#codice">⑥ Nel tuo codice</a></li>
+  <li><a href="#componenti">⑦ Nei componenti</a></li>
+  <li><a href="#documentazione">⑧ Doc ufficiale</a></li>
+  <li><a href="#errori">⑨ Errori tipici</a></li>
+  <li><a href="#verifica">⑩ Verifica</a></li>
+  <li><a href="#esercizi">⑪ Esercizi</a></li>
+</ul>
+
+<h2 id="problema"><span class="section-num">1</span>Il problema: leggere codice che "sembra" chiaro</h2>
+<p>Questa riga del tuo <code>handleChange</code> contiene <b>quattro</b> concetti diversi:</p>
+<pre class="code">setFormFields({ ...formFields, [name]: value });</pre>
+<ul>
+  <li><code>{ … }</code>: un <b>oggetto nuovo</b>, cioè un nuovo riferimento. È per questo che React se ne accorge.</li>
+  <li><code>...formFields</code>: lo <b>spread</b>, che copia (in superficie) tutte le chiavi.</li>
+  <li><code>[name]: value</code>: una <b>computed property</b>, cioè una chiave decisa a runtime.</li>
+  <li><code>setFormFields(…)</code>: chiede un <b>re-render</b>. Non cambia <code>formFields</code> subito.</li>
+</ul>
+<p>Se anche uno solo di questi pezzi è sfocato, il codice funziona finché non smette, e a quel punto non sai dove guardare. Questo modulo li mette a fuoco uno per uno.</p>
+
+<h2 id="teoria"><span class="section-num">2</span>Teoria e terminologia</h2>
+
+<h3>A · Valori e riferimenti</h3>
+<div class="table-wrap"><table>
+<tr><th></th><th>Primitivi</th><th>Oggetti (anche array e funzioni)</th></tr>
+<tr><td>Esempi</td><td><code>'Leo'</code>, <code>42</code>, <code>true</code>, <code>null</code>, <code>undefined</code></td><td><code>{ email }</code>, <code>[1, 2]</code>, <code>() =&gt; {}</code></td></tr>
+<tr><td>La variabile contiene…</td><td>il valore stesso</td><td>un <b>riferimento</b>, cioè l'indirizzo dell'oggetto</td></tr>
+<tr><td><code>b = a</code></td><td>copia il valore</td><td>copia l'<b>indirizzo</b>: <code>a</code> e <code>b</code> puntano allo stesso oggetto</td></tr>
+<tr><td><code>a === b</code></td><td>stesso valore?</td><td><b>stesso oggetto?</b> Il contenuto non conta</td></tr>
+</table></div>
+<pre class="code">const a = { n: 1 };
+const b = a;          // stesso oggetto
+const c = { n: 1 };   // oggetto diverso con lo stesso contenuto
+b.n = 2;
+a.n;        // 2   ← modificando b hai modificato a
+a === b;    // true
+a === c;    // false</pre>
+<div class="callout"><span class="title">Perché è la base di React</span>
+React decide se qualcosa è cambiato con <code>Object.is(vecchio, nuovo)</code>, che per gli oggetti si comporta come <code>===</code>. Stesso riferimento vuol dire "non è cambiato niente", anche se dentro hai modificato tutto. Oggetto nuovo vuol dire "è cambiato", anche se il contenuto è identico. Lo hai visto in M5 con il <code>value</code> del Provider e con <code>cartItems.push</code>.</div>
+
+<h3>B · Destructuring, spread, rest, computed property</h3>
+<div class="table-wrap"><table>
+<tr><th>Sintassi</th><th>Cosa fa</th><th>Esempio nel progetto</th></tr>
+<tr><td><code>const { a, b } = obj</code></td><td>estrae proprietà in variabili</td><td><code>const { displayName, email } = userAuth</code></td></tr>
+<tr><td><code>const { user } = await fn()</code></td><td>estrae da ciò che restituisce una funzione</td><td><code>const { user } = await signInWithGooglePopup()</code></td></tr>
+<tr><td><code>const [x, setX] = arr</code></td><td>destructuring di array, per <b>posizione</b></td><td><code>const [formFields, setFormFields] = useState(…)</code></td></tr>
+<tr><td><code>(a = {})</code></td><td>default, usato solo se l'argomento è <code>undefined</code></td><td><code>additionalInformation = {}</code></td></tr>
+<tr><td><code>{ ...obj, k: v }</code></td><td>spread: copia le chiavi, e quelle scritte <b>dopo</b> vincono</td><td><code>{ ...formFields, [name]: value }</code></td></tr>
+<tr><td><code>[...arr, x]</code></td><td>array nuovo con gli elementi più x</td><td><code>[...cartItems, { ...product, quantity: 1 }]</code></td></tr>
+<tr><td><code>({ label, ...otherProps })</code></td><td><b>rest</b>: raccoglie le chiavi che restano</td><td><code>FormInput = ({ label, ...otherProps })</code></td></tr>
+<tr><td><code>{ [name]: value }</code></td><td>computed property: il nome della chiave è il <b>valore</b> di <code>name</code></td><td><code>name = 'email'</code> → <code>{ email: value }</code></td></tr>
+</table></div>
+<div class="callout warn"><span class="title">Spread = copia in superficie (shallow)</span>
+<code>{ ...user }</code> crea un oggetto nuovo, ma se <code>user.address</code> è un oggetto, la copia <b>condivide</b> lo stesso <code>address</code>. Modificare <code>copia.address.city</code> modifica anche l'originale. Per cambiare un campo annidato, copia ogni livello: <code>{ ...user, address: { ...user.address, city: 'Roma' } }</code>.</div>
+
+<h3>C · Le funzioni sono valori</h3>
+<pre class="code">const signOutUser = async () => await signOut(auth);
+
+onClick={signOutUser}     // passi la FUNZIONE: React la chiamerà al click
+onClick={signOutUser()}   // la CHIAMI subito, durante il render, e passi il risultato (una Promise)</pre>
+<p>Una funzione può essere passata, salvata e restituita come qualsiasi altro valore. È quello che succede con <code>onChange={handleChange}</code>, con le callback di <code>onAuthStateChanged</code> e con <code>return unsubscribe</code>. Una funzione definita dentro un componente <b>ricorda</b> le variabili del render in cui è nata: si chiama <dfn data-term="closure">closure</dfn>.</p>
+
+<h3>D · Codice asincrono</h3>
+<div class="table-wrap"><table>
+<tr><th>Termine</th><th>Significato</th></tr>
+<tr><td><dfn data-term="promise">Promise</dfn></td><td>Un oggetto che rappresenta un risultato futuro. Ha tre stati: <b>pending</b> (in attesa), <b>fulfilled</b> (risolta con un valore), <b>rejected</b> (rifiutata con un errore).</td></tr>
+<tr><td><code>async function</code></td><td>Una funzione che restituisce <b>sempre</b> una Promise, anche se dentro fai <code>return 5</code>.</td></tr>
+<tr><td><dfn data-term="await">await</dfn></td><td>Sospende <b>solo la funzione async in cui si trova</b> finché la Promise non si risolve. Se la Promise viene rifiutata, <code>await</code> <b>lancia</b> l'errore su quella riga.</td></tr>
+<tr><td><code>try/catch</code> + <code>await</code></td><td>Intercetta gli errori delle Promise, ma solo se c'è <code>await</code>.</td></tr>
+<tr><td><code>.then(fn).catch(fn)</code></td><td>Lo stesso meccanismo scritto con le callback. La documentazione di Firebase lo usa spesso.</td></tr>
+<tr><td><code>Promise.all([p1, p2])</code></td><td>Aspetta più Promise <b>in parallelo</b>. Se una viene rifiutata, il tutto viene rifiutato.</td></tr>
+<tr><td><dfn data-term="eventloop">Event loop</dfn></td><td>Il meccanismo che decide <b>quando</b> eseguire il codice in attesa: prima finisce il codice sincrono, poi le microtask (Promise), poi le task (setTimeout, eventi).</td></tr>
+</table></div>
+
+<h3>E · Il ciclo di render di React</h3>
+<ol>
+  <li>Un componente è una <b>funzione</b> che React chiama per sapere cosa disegnare.</li>
+  <li><code>useState</code> restituisce <code>[valoreDiQuestoRender, setter]</code>.</li>
+  <li>Il setter <b>non cambia la variabile</b>: chiede a React un nuovo render, in cui <code>useState</code> restituirà il valore nuovo.</li>
+  <li>Dentro un render, lo state è una <b>fotografia</b> fissa. <code>setCount(count + 1); console.log(count)</code> stampa il valore <b>vecchio</b>.</li>
+  <li>Dopo il render, React aggiorna il DOM ed esegue gli effect.</li>
+</ol>
+
+<h2 id="modello"><span class="section-num">3</span>Modello mentale: etichette e scatole</h2>
+<div class="card">
+<svg class="diagram" viewBox="0 0 900 250" role="img" aria-label="Variabili come etichette che puntano a oggetti">
+  <defs><marker id="m0a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" style="fill:var(--ink)"/></marker></defs>
+  <text x="30" y="28" font-weight="700">Variabili (etichette)</text>
+  <text x="500" y="28" font-weight="700">Memoria (scatole)</text>
+  <g class="mono" font-size="13">
+    <rect class="box react" x="30" y="50" width="150" height="34" rx="6"/><text x="45" y="72">formFields</text>
+    <rect class="box react" x="30" y="110" width="150" height="34" rx="6"/><text x="45" y="132">copia = formFields</text>
+    <rect class="box react" x="30" y="170" width="150" height="34" rx="6"/><text x="45" y="192">nuovo = {...formFields}</text>
+    <rect class="box" x="500" y="60" width="330" height="60" rx="8" style="stroke:var(--c-fs)"/><text x="515" y="84">#A1 { email: 'leo@…',</text><text x="515" y="104">      password: '…' }</text>
+    <rect class="box" x="500" y="160" width="330" height="60" rx="8" style="stroke:var(--good)"/><text x="515" y="184">#B7 { email: 'leo@…',</text><text x="515" y="204">      password: '…' }</text>
+  </g>
+  <path class="wire" d="M180 67 C 330 67 350 85 498 85" marker-end="url(#m0a)" style="stroke:var(--ink)"/>
+  <path class="wire" d="M180 127 C 330 127 350 100 498 98" marker-end="url(#m0a)" style="stroke:var(--ink)"/>
+  <path class="wire" d="M180 187 C 330 187 350 190 498 190" marker-end="url(#m0a)" style="stroke:var(--good)"/>
+  <text x="250" y="150" font-size="12" class="muted">stessa scatola: === true</text>
+  <text x="250" y="232" font-size="12" style="fill:var(--good)">scatola nuova (stesso contenuto): === false → React vede un cambiamento</text>
+</svg>
+</div>
+
+<h2 id="flusso"><span class="section-num">4</span>Flussi animati</h2>
+<h3>L'event loop: chi parte prima?</h3>
+<p>Prima di premere Avanti, scrivi su un foglio l'ordine in cui pensi che vengano stampati i numeri.</p>
+<template id="svg-loop">
+<svg class="diagram" viewBox="0 0 900 230" role="img" aria-label="Call stack, microtask, task, console">
+  <g data-node="stack"><rect class="box react" x="20" y="20" width="200" height="190" rx="10"/><text x="120" y="44" text-anchor="middle" font-weight="700" class="t-react">Call stack</text><text x="120" y="64" text-anchor="middle" font-size="11" class="muted">codice in esecuzione ORA</text></g>
+  <g data-node="web"><rect class="box" x="245" y="20" width="190" height="80" rx="10" style="stroke:var(--warn)"/><text x="340" y="44" text-anchor="middle" font-weight="700">Timer del browser</text><text x="340" y="66" text-anchor="middle" font-size="11" class="muted">setTimeout aspetta qui</text></g>
+  <g data-node="micro"><rect class="box fs" x="460" y="20" width="200" height="80" rx="10"/><text x="560" y="44" text-anchor="middle" font-weight="700" class="t-fs">Microtask</text><text x="560" y="66" text-anchor="middle" font-size="11" class="muted">Promise / await · priorità ALTA</text></g>
+  <g data-node="task"><rect class="box auth" x="460" y="120" width="200" height="90" rx="10"/><text x="560" y="144" text-anchor="middle" font-weight="700" class="t-auth">Task queue</text><text x="560" y="166" text-anchor="middle" font-size="11" class="muted">setTimeout, click, rete</text><text x="560" y="182" text-anchor="middle" font-size="11" class="muted">priorità più bassa</text></g>
+  <g data-node="out"><rect class="box" x="690" y="20" width="190" height="190" rx="10" style="stroke:var(--ink)"/><text x="785" y="44" text-anchor="middle" font-weight="700">Console</text></g>
+</svg>
+</template>
+<pre class="code" id="code-loop" hidden>console.log('1');
+setTimeout(() => console.log('2'), 0);
+Promise.resolve().then(() => console.log('3'));
+const run = async () => {
+  console.log('4');
+  await null;
+  console.log('5');
+};
+run();
+console.log('6');</pre>
+<div id="loop"></div>
+
+<h3>Il ciclo di render: lo state è una fotografia</h3>
+<template id="svg-render">
+<svg class="diagram" viewBox="0 0 900 180" role="img" aria-label="Render, click, setState, nuovo render">
+  <g data-node="r1"><rect class="box react" x="20" y="40" width="190" height="100" rx="10"/><text x="115" y="66" text-anchor="middle" font-weight="700" class="t-react">Render 1</text><text x="115" y="90" text-anchor="middle" font-size="12" class="mono">count = 0</text><text x="115" y="112" text-anchor="middle" font-size="11" class="muted">handleClick vede 0</text></g>
+  <g data-node="click"><rect class="box auth" x="245" y="40" width="190" height="100" rx="10"/><text x="340" y="66" text-anchor="middle" font-weight="700" class="t-auth">Click</text><text x="340" y="90" text-anchor="middle" font-size="12" class="mono">setCount(0 + 1)</text><text x="340" y="112" text-anchor="middle" font-size="12" class="mono">console.log(0)</text></g>
+  <g data-node="react"><rect class="box" x="470" y="40" width="190" height="100" rx="10" style="stroke:var(--warn)"/><text x="565" y="66" text-anchor="middle" font-weight="700">React</text><text x="565" y="90" text-anchor="middle" font-size="11.5">salva 1 per il</text><text x="565" y="108" text-anchor="middle" font-size="11.5">prossimo render</text></g>
+  <g data-node="r2"><rect class="box react" x="695" y="40" width="190" height="100" rx="10"/><text x="790" y="66" text-anchor="middle" font-weight="700" class="t-react">Render 2</text><text x="790" y="90" text-anchor="middle" font-size="12" class="mono">count = 1</text><text x="790" y="112" text-anchor="middle" font-size="11" class="muted">NUOVO handleClick</text></g>
+</svg>
+</template>
+<pre class="code" id="code-render" hidden>const Counter = () => {
+  const [count, setCount] = useState(0);
+
+  const handleClick = () => {
+    setCount(count + 1);
+    console.log(count);
+  };
+
+  return &lt;button onClick={handleClick}>{count}&lt;/button>;
+};</pre>
+<div id="render"></div>
+
+<h2 id="dati"><span class="section-num">5</span>Forma dei dati</h2>
+<div class="grid-2">
+  <div class="card"><b>Una Promise nei suoi tre stati</b><div id="insp-p" style="margin-top:8px"></div></div>
+  <div class="card"><b><code>useState('')</code> restituisce…</b><div id="insp-us" style="margin-top:8px"></div></div>
+  <div class="card"><b><code>event.target</code> in handleChange</b> (solo i campi che usi)<div id="insp-ev" style="margin-top:8px"></div></div>
+  <div class="card"><b>Rest in <code>FormInput</code></b>: <code>{ label, ...otherProps }</code><div id="insp-rest" style="margin-top:8px"></div></div>
+</div>
+
+<h2 id="codice"><span class="section-num">6</span>Nel tuo codice</h2>
+<div class="annot">
+<pre class="code">const handleChange = (event) => {
+  const { name, value } = event.target;
+
+  setFormFields({ ...formFields, [name]: value });
+};
+
+const handleSubmit = async (event) => {
+  event.preventDefault();
+
+  try {
+    const { user } = await createAuthUserWithEmailAndPassword(
+      email,
+      password
+    );
+    await createUserDocumentFromAuth(user, { displayName });
+    resetFormFields();
+  } catch (error) {
+    // ...
+  }
+};
+
+const FormInput = ({ label, ...otherProps }) => (
+  &lt;input className='form-input' {...otherProps} />
+);</pre>
+<ol>
+  <li data-lines="1"><b>Funzione come valore</b>: <code>handleChange</code> viene passata a <code>onChange</code>, e la chiamerà React.</li>
+  <li data-lines="2"><b>Destructuring</b>: estrae <code>name</code> (l'attributo dell'input) e <code>value</code> (il testo attuale).</li>
+  <li data-lines="4"><b>Oggetto nuovo + spread + computed property</b>. Se l'utente scrive nell'input <code>name="email"</code>: <code>{ ...formFields, email: 'l' }</code>.</li>
+  <li data-lines="7"><b>async</b>: <code>handleSubmit</code> restituisce una Promise, che React ignora.</li>
+  <li data-lines="11-14"><b>await + destructuring</b>: aspetta il <code>UserCredential</code> e ne estrae <code>user</code>.</li>
+  <li data-lines="10,18-20"><b>try/catch con await</b>: qualunque Promise rifiutata sopra arriva al catch.</li>
+  <li data-lines="23"><b>Rest nei parametri</b>: <code>label</code> a parte, tutto il resto (type, name, value, onChange, required) in <code>otherProps</code>.</li>
+  <li data-lines="24"><b>Spread nelle props JSX</b>: equivale a scrivere a mano <code>type={…} name={…} value={…} …</code>.</li>
+</ol>
+</div>
+
+<h2 id="componenti"><span class="section-num">7</span>Nei componenti: dove vive ogni concetto</h2>
+<div class="table-wrap"><table>
+<tr><th>Concetto</th><th>Dove lo trovi</th><th>Cosa succede se lo sbagli</th></tr>
+<tr><td>Riferimenti e immutabilità</td><td><code>handleChange</code>, CartContext, il <code>value</code> dei Provider</td><td>UI che non si aggiorna (M5 ❷)</td></tr>
+<tr><td>Destructuring</td><td><code>const { user } = await …</code>, <code>useState</code>, props</td><td><code>undefined</code> silenziosi se sbagli una chiave</td></tr>
+<tr><td>Spread e ordine</td><td><code>{ displayName, email, createdAt, ...additionalInformation }</code></td><td>il valore sbagliato vince (M3 E1 D3)</td></tr>
+<tr><td>Rest</td><td><code>FormInput</code>, <code>Button</code></td><td>prop che non arrivano all'elemento DOM</td></tr>
+<tr><td>Funzione o chiamata</td><td><code>onClick={signOutUser}</code>, <code>return unsubscribe</code></td><td>esecuzione durante il render, cleanup perso (M5)</td></tr>
+<tr><td>await e Promise</td><td>tutti i form, <code>createUserDocumentFromAuth</code></td><td><code>x.exists is not a function</code> (M3 ❶)</td></tr>
+<tr><td>Snapshot dello state</td><td>ogni <code>setX</code></td><td>leggere il valore vecchio subito dopo il set</td></tr>
+</table></div>
+
+<h2 id="documentazione"><span class="section-num">8</span>Doc ufficiale: .then contro async/await</h2>
+<p>La documentazione di Firebase usa spesso <code>.then().catch()</code>, il corso usa <code>async/await</code>. Sono <b>lo stesso meccanismo</b> scritto in due modi.</p>
+<div class="grid-2">
+<div><p><span class="pill auth">DOC</span> <a href="https://firebase.google.com/docs/auth/web/password-auth" target="_blank" rel="noopener">Password Authentication</a></p>
+<pre class="code">createUserWithEmailAndPassword(auth, email, password)
+  .then((userCredential) => {
+    // Signed up
+    const user = userCredential.user;
+    // ...
+  })
+  .catch((error) => {
+    const errorCode = error.code;
+    const errorMessage = error.message;
+    // ..
+  });</pre></div>
+<div><p><span class="pill react">TRADUZIONE</span> async/await</p>
+<pre class="code">try {
+  const userCredential = await createUserWithEmailAndPassword(
+    auth, email, password
+  );
+  const user = userCredential.user;   // oppure: const { user } = await …
+  // ...
+} catch (error) {
+  const errorCode = error.code;
+  const errorMessage = error.message;
+  // ..
+}</pre></div>
+</div>
+<div class="table-wrap"><table>
+<tr><th>.then / .catch</th><th>async / await</th></tr>
+<tr><td>il parametro di <code>.then((x) =&gt; …)</code></td><td>il valore di <code>const x = await …</code></td></tr>
+<tr><td>il corpo di <code>.then</code></td><td>le righe dopo l'<code>await</code></td></tr>
+<tr><td><code>.catch((error) =&gt; …)</code></td><td><code>catch (error) { … }</code>, solo per le righe dentro il <code>try</code></td></tr>
+<tr><td>il codice <b>dopo</b> la catena parte subito</td><td>il codice dopo <code>await</code> aspetta</td></tr>
+</table></div>
+<p style="font-size:13px;color:var(--muted)">Snippet di Firebase (Google), licenza Apache 2.0. Per la sintassi JS: MDN, pagine <i>Destructuring assignment</i>, <i>Spread syntax</i>, <i>async function</i>, <i>Promise</i>. Per React: react.dev, pagina <i>State as a Snapshot</i>.</p>
+
+<h2 id="errori"><span class="section-num">9</span>Errori tipici</h2>
+<div class="card"><h3 style="margin-top:0">❶ "Ho copiato l'oggetto, quindi è indipendente"</h3>
+<pre class="code">const copia = { ...user };
+copia.address.city = 'Roma';
+user.address.city;   // 'Roma' ← address è condiviso</pre>
+<div class="grid-2"><div class="callout bad"><span class="title">Modello sbagliato</span>"Lo spread clona tutto."</div><div class="callout good"><span class="title">Modello giusto</span>"Lo spread copia <b>un livello</b>. Ogni oggetto annidato che modifico va copiato a sua volta."</div></div></div>
+
+<div class="card"><h3 style="margin-top:0">❷ "forEach aspetta gli await"</h3>
+<pre class="code">ids.forEach(async (id) => {
+  await deleteUserDocument(db, id);
+});
+console.log('fatto');   // stampato PRIMA che le cancellazioni finiscano</pre>
+<p><code>forEach</code> chiama la callback e <b>ignora</b> la Promise che restituisce. Usa <code>for (const id of ids) await …</code> se le vuoi in sequenza, oppure <code>await Promise.all(ids.map(…))</code> se le vuoi in parallelo.</p>
+<div class="grid-2"><div class="callout bad"><span class="title">Modello sbagliato</span>"await dentro un ciclo fa aspettare il ciclo."</div><div class="callout good"><span class="title">Modello giusto</span>"await fa aspettare <b>la funzione in cui si trova</b>. Se quella funzione è una callback, aspetta solo la callback."</div></div></div>
+
+<div class="card"><h3 style="margin-top:0">❸ "Dopo setState il valore è aggiornato"</h3>
+<pre class="code">setFormFields({ ...formFields, email: 'x' });
+console.log(formFields.email);   // valore VECCHIO</pre>
+<div class="grid-2"><div class="callout bad"><span class="title">Modello sbagliato</span>"setState assegna la variabile."</div><div class="callout good"><span class="title">Modello giusto</span>"setState prenota un render nuovo. La variabile di <b>questo</b> render non cambierà mai."</div></div></div>
+
+<div class="card"><h3 style="margin-top:0">❹ "try/catch prende tutto"</h3>
+<pre class="code">try {
+  createUserDocumentFromAuth(user);   // senza await
+} catch (e) {
+  // non arriva MAI qui per errori di Firestore
+}</pre>
+<p>Il <code>try</code> finisce prima che la Promise venga rifiutata. L'errore diventa un "Uncaught (in promise)".</p></div>
+
+<h2 id="verifica"><span class="section-num">10</span>Verifica</h2>
+<div class="callout" id="score"></div>
+<div id="q1"></div><div id="q2"></div><div id="q3"></div><div id="q4"></div>
+<h3>Domande da dev</h3>
+<div id="q5"></div><div id="q6"></div><div id="q7"></div><div id="q8"></div>
+
+<h2 id="esercizi"><span class="section-num">11</span>Esercizi</h2>
+<div id="ex-list"></div>
+
+<div class="footer-nav">
+  <a class="btn" href="../index.html">← Dashboard</a>
+  <a class="btn" href="m1-firebase.html">M1 Firebase →</a>
+</div>
+</main>
+</div>
+<script src="../assets/manifest.js"></script>
+<script src="../assets/registro.js"></script>
+<script src="../assets/glossario.js"></script>
+<script src="../assets/app.js"></script>
+<script>
+Lab.renderInspector(document.getElementById('insp-p'), { pending: { __type: 'Promise', '[[PromiseState]]': 'pending', '[[PromiseResult]]': undefined }, fulfilled: { __type: 'Promise', '[[PromiseState]]': 'fulfilled', '[[PromiseResult]]': { __type: 'UserCredential' } }, rejected: { __type: 'Promise', '[[PromiseState]]': 'rejected', '[[PromiseResult]]': { __type: 'FirebaseError', code: 'auth/invalid-credential' } } });
+Lab.renderInspector(document.getElementById('insp-us'), { __type: 'Array(2)', 0: '', 1: 'ƒ dispatchSetState() — il setter' });
+Lab.renderInspector(document.getElementById('insp-ev'), { __type: 'HTMLInputElement', name: 'email', value: 'leo@m', type: 'email' });
+Lab.renderInspector(document.getElementById('insp-rest'), { label: 'Email', otherProps: { type: 'email', required: true, name: 'email', value: 'leo@m', onChange: 'ƒ handleChange()' } });
+
+const L = (stack, micro, task, web, out) => ({ 'call stack': stack, microtask: micro, 'task queue': task, timer: web, console: out });
+Lab.stepper('#loop', { title: 'Event loop', svg: '#svg-loop', code: '#code-loop', steps: [
+  { title: 'Codice sincrono: stampa 1', on: ['stack', 'out'], lines: [1], dataLabel: 'Stato', text: '<p>Il codice sincrono viene eseguito riga per riga, subito.</p>', data: L(['console.log(1)'], [], [], [], ['1']) },
+  { title: 'setTimeout: affidato al timer', on: ['stack', 'web'], lines: [2], dataLabel: 'Stato', text: '<p><code>setTimeout</code> non esegue la callback: la consegna al timer del browser. Anche con 0 ms, la callback potrà partire solo quando il call stack è vuoto e le microtask sono finite.</p>', data: L([], [], [], ['()=>log(2) · 0ms'], ['1']) },
+  { title: 'Promise.then: in coda alle microtask', on: ['stack', 'micro', 'task'], lines: [3], dataLabel: 'Stato', text: '<p>La Promise è già risolta, ma <code>.then</code> non viene <b>mai</b> eseguito subito: va in coda alle microtask. Intanto il timer è scaduto e la sua callback è passata nella task queue.</p>', data: L([], ['()=>log(3)'], ['()=>log(2)'], [], ['1']) },
+  { title: 'run(): parte in modo sincrono', on: ['stack', 'out'], lines: [[4, 5], 9], dataLabel: 'Stato', text: '<p>Chiamare una funzione async ne esegue <b>subito</b> il corpo, fino al primo <code>await</code>. Stampa 4.</p>', data: L(['run()'], ['()=>log(3)'], ['()=>log(2)'], [], ['1', '4']) },
+  { title: 'await: run si sospende', on: ['stack', 'micro'], lines: [6], dataLabel: 'Stato', text: '<p><code>await null</code>: la parte che resta di <code>run</code> diventa una microtask, accodata <b>dopo</b> quella del 3. <code>run</code> esce dal call stack.</p>', data: L([], ['()=>log(3)', 'run: riprendi da riga 7'], ['()=>log(2)'], [], ['1', '4']) },
+  { title: 'Ultima riga sincrona: 6', on: ['stack', 'out'], lines: [10], dataLabel: 'Stato', text: '<p>Il codice sincrono continua. Stampa 6. Ora il call stack è vuoto.</p>', data: L([], ['()=>log(3)', 'run: riprendi da riga 7'], ['()=>log(2)'], [], ['1', '4', '6']) },
+  { title: 'Stack vuoto: TUTTE le microtask', on: ['micro', 'out'], lines: [3, 7], dataLabel: 'Stato', text: '<p>L\'event loop svuota <b>tutta</b> la coda delle microtask, in ordine: 3, poi la ripresa di run, che stampa 5.</p>', data: L([], [], ['()=>log(2)'], [], ['1', '4', '6', '3', '5']) },
+  { title: 'Solo ora le task: 2', on: ['task', 'out'], lines: [2], dataLabel: 'Risultato', text: '<p>Microtask finite, quindi la prima task: stampa 2. <b>Ordine finale: 1 4 6 3 5 2.</b></p><p>Regola: sincrono → microtask (Promise/await) → task (setTimeout, eventi).</p>', data: L([], [], [], [], ['1', '4', '6', '3', '5', '2']) },
+] });
+Lab.stepper('#render', { title: 'State come fotografia', svg: '#svg-render', code: '#code-render', steps: [
+  { title: 'Render 1', on: ['r1'], lines: [[1, 2], 9], dataLabel: 'Render 1', text: '<p>React chiama <code>Counter()</code>. <code>useState(0)</code> restituisce <code>[0, setCount]</code>. Viene creata una funzione <code>handleClick</code> che <b>ricorda</b> <code>count = 0</code>.</p>', data: { count: 0, handleClick: 'ƒ (vede count = 0)' } },
+  { title: 'Click → setCount(0 + 1)', on: ['r1', 'click'], lines: [[4, 5]], dataLabel: 'Dentro handleClick', text: '<p><code>count</code> qui vale 0, quindi <code>setCount(1)</code>. Il setter <b>non</b> modifica <code>count</code>: chiede un nuovo render.</p>', data: { count: 0, richiesto: 'setCount(1)' } },
+  { title: 'console.log stampa 0', on: ['click'], lines: [6], dataLabel: 'Console', text: '<p><code>count</code> è una costante di <b>questo</b> render: vale ancora 0 e varrà 0 per sempre. È la "fotografia".</p>', data: { console: ['0'] } },
+  { title: 'React programma il nuovo render', on: ['react'], lines: [], dataLabel: 'React', text: '<p>Finito l\'event handler, React esegue il render con il valore nuovo. Più setter nello stesso handler vengono raggruppati (batching).</p>', data: { 'prossimo count': 1 } },
+  { title: 'Render 2', on: ['r2'], lines: [[1, 2], 9], dataLabel: 'Render 2', text: '<p>React chiama di nuovo <code>Counter()</code>. Ora <code>useState</code> restituisce 1, e nasce un <b>nuovo</b> <code>handleClick</code> che vede 1.</p><p>Cosa stamperebbe <code>setCount(count + 1); setCount(count + 1);</code>? E il conteggio arriverebbe a 2 o a 3? Le domande da dev ci tornano.</p>', data: { count: 1, handleClick: 'ƒ NUOVA (vede count = 1)' } },
+] });
+
+Lab.quiz('#q1', { id: 'm0-q1', question: 'Cosa stampa?', code: "const a = { n: 1 };\nconst b = { ...a };\nb.n = 2;\nconsole.log(a.n, a === b);",
+  options: [ { t: '<code>2 true</code>', why: '<span class="step">Lo spread crea un oggetto <b>nuovo</b>: <code>b</code> non è <code>a</code>.</span>' }, { t: '<code>1 false</code>', ok: true, why: '<span class="step"><code>b</code> è una scatola nuova: modificarla non tocca <code>a</code>, e i riferimenti sono diversi. Funziona perché <code>n</code> è un primitivo: con un oggetto annidato sarebbe stato condiviso.</span>' }, { t: '<code>1 true</code>', why: '<span class="step">Stesso contenuto iniziale non vuol dire stesso oggetto. <code>===</code> sugli oggetti confronta gli indirizzi.</span>' } ] });
+Lab.quiz('#q2', { id: 'm0-q2', question: '<code>const name = \'email\'</code>. Che oggetto crea <code>{ ...{ email: \'a\', password: \'b\' }, [name]: \'c\' }</code>?',
+  options: [ { t: '<code>{ email: \'a\', password: \'b\', name: \'c\' }</code>', why: '<span class="step">Le parentesi quadre fanno usare il <b>valore</b> di <code>name</code> come chiave, non la parola "name".</span>' }, { t: '<code>{ email: \'c\', password: \'b\' }</code>', ok: true, why: '<span class="step">La chiave calcolata è <code>email</code>, e siccome è scritta dopo lo spread, vince.</span>' }, { t: '<code>{ email: \'a\', password: \'b\' }</code>', why: '<span class="step">Questo sarebbe vero se <code>[name]: \'c\'</code> fosse scritto <b>prima</b> dello spread. L\'ordine conta: l\'ultima chiave vince.</span>' } ] });
+Lab.quiz('#q3', { id: 'm0-q3', question: 'Cosa restituisce <code>const f = async () =&gt; 5;</code> chiamata come <code>f()</code>?',
+  options: [ { t: '<code>5</code>', why: '<span class="step">Una funzione async restituisce <b>sempre</b> una Promise. Il 5 è dentro.</span>' }, { t: 'Una Promise che si risolve con 5', ok: true, why: '<span class="step">Per avere 5: <code>await f()</code>, oppure <code>f().then(v =&gt; …)</code>.</span>' }, { t: '<code>undefined</code>', why: '<span class="step">Il return c\'è (arrow con corpo implicito). Il valore però è avvolto in una Promise.</span>' } ] });
+Lab.quiz('#q4', { id: 'm0-q4', question: 'In un componente: <code>&lt;button onClick={handleClick()}&gt;</code>. Cosa succede?',
+  options: [ { t: 'handleClick parte al click', why: '<span class="step">Le parentesi la eseguono <b>subito</b>, durante il render. A <code>onClick</code> arriva il suo valore di ritorno.</span>' }, { t: 'handleClick parte a ogni render, e al click non succede niente (o un errore, se il valore restituito non è una funzione)', ok: true, why: '<span class="step">Se <code>handleClick</code> chiama un setState, peggio ancora: render → setState → render → … ciclo infinito ("Too many re-renders").</span>' }, { t: 'Errore di sintassi', why: '<span class="step">La sintassi è valida: è la semantica a essere sbagliata. Nessun errore ti avvisa.</span>' } ] });
+Lab.quiz('#q5', { id: 'm0-q5', question: 'Count vale 0. Nell\'handler: <code>setCount(count + 1); setCount(count + 1);</code>. Quanto vale count al render successivo?',
+  options: [ { t: '2', why: '<span class="step">Entrambe le chiamate leggono la <b>stessa</b> fotografia: <code>count = 0</code>. Sono due richieste di "metti 1".</span>' }, { t: '1', ok: true, why: '<span class="step">Per incrementare due volte usa la <b>forma funzionale</b>: <code>setCount((c) =&gt; c + 1)</code>. React passa a ogni funzione il valore più recente in coda, non quello della fotografia.</span>' }, { t: 'Dipende dalla velocità del computer', why: '<span class="step">È deterministico: la fotografia del render non cambia mai.</span>' } ] });
+Lab.quiz('#q6', { id: 'm0-q6', question: 'Quanto ci mette, circa?', code: "const wait = (ms) => new Promise((r) => setTimeout(r, ms));\nconst run = async () => {\n  await wait(100);\n  await wait(100);\n  await Promise.all([wait(100), wait(100)]);\n};",
+  options: [ { t: '~400 ms', why: '<span class="step"><code>Promise.all</code> fa partire le due attese <b>insieme</b>: in tutto ~100 ms, non 200.</span>' }, { t: '~300 ms', ok: true, why: '<span class="step">100 + 100 in sequenza (ogni await aspetta il precedente) + 100 in parallelo. Pensaci quando leggi dati indipendenti: in parallelo risparmi tempo.</span>' }, { t: '~100 ms', why: '<span class="step">I primi due <code>await</code> sono in sequenza: il secondo <code>wait</code> parte solo dopo che il primo è finito.</span>' } ] });
+Lab.quiz('#q7', { id: 'm0-q7', question: 'Cosa stampa?', code: "const f = async () => {\n  try {\n    return Promise.reject(new Error('x'));\n  } catch (e) {\n    return 'preso';\n  }\n};\nf().then(console.log).catch((e) => console.log('fuori:', e.message));",
+  options: [ { t: '<code>preso</code>', why: '<span class="step"><code>return promise</code> senza <code>await</code> esce dalla funzione <b>prima</b> che la Promise venga rifiutata: il catch interno non la vede mai.</span>' }, { t: '<code>fuori: x</code>', ok: true, why: '<span class="step">Con <code>return await Promise.reject(…)</code> il rifiuto avverrebbe dentro il try, e stamperebbe "preso". Dettaglio sottile, ma molto comune nei wrapper come quelli di <code>firebase.utils.js</code>.</span>' }, { t: 'Niente: errore non gestito', why: '<span class="step">L\'errore viene gestito: dal <code>.catch</code> esterno.</span>' } ] });
+Lab.quiz('#q8', { id: 'm0-q8', type: 'order', question: 'Ordina l\'output: <code>console.log(\'A\'); setTimeout(() =&gt; console.log(\'B\')); queueMicrotask(() =&gt; console.log(\'C\')); console.log(\'D\');</code>',
+  items: ['A', 'D', 'C', 'B'], why: 'Sincrono (A, D) → microtask (C) → task (B).', explain: ['Stessa regola dell\'animazione: lo stack si svuota, poi tutte le microtask, poi una task alla volta.'] });
+Lab.quizScore('#score');
+Lab.exercises('#ex-list', 'm0');
+</script>
+</body>
+</html>

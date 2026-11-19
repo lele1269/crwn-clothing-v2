@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CRWN Learning Lab</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body data-root=".">
+<div class="lab">
+<nav class="lab-nav" id="lab-nav"></nav>
+<main class="lab-main">
+  <div class="kicker">Dashboard</div>
+  <h1 id="hello">Il tuo percorso</h1>
+  <p class="lead">Qui vedi solo progressi <b>guadagnati</b>: XP e livelli si muovono soltanto con esercizi valutati. I quiz sono allenamento, non voto.</p>
+
+  <div class="grid-3" id="stats"></div>
+
+  <h2>Diagnosi del professore</h2>
+  <div class="card" id="diag"></div>
+
+  <h2>Percorso</h2>
+  <ul class="path" id="path"></ul>
+
+  <h2>Ultime valutazioni</h2>
+  <div id="last"></div>
+
+  <h2>Badge</h2>
+  <p>I badge li assegna il professore quando li meriti davvero. Niente badge di consolazione.</p>
+  <div class="badges" id="badges"></div>
+</main>
+</div>
+<script src="assets/manifest.js"></script>
+<script src="assets/registro.js"></script>
+<script src="assets/glossario.js"></script>
+<script src="assets/app.js"></script>
+<script>
+const R = window.REGISTRO, { h } = Lab;
+const xp = Lab.totalXP(), { cur, next } = Lab.levelFor(xp);
+const maxXP = Lab.allExercises().reduce((s, e) => s + e.stars * 100, 0);
+const voti = R.voti || [];
+const media = voti.length ? (voti.reduce((s, v) => s + v.voto, 0) / voti.length).toFixed(1) : '—';
+document.getElementById('hello').textContent = `Il percorso di ${R.studente}`;
+
+const stats = document.getElementById('stats');
+stats.append(
+  h('div', { class: 'card stat' }, h('div', { class: 'v' }, `${cur.ic} ${cur.name}`), h('div', { class: 'l' }, next ? `${next.xp - xp} XP a ${next.ic} ${next.name}` : 'Livello massimo'),
+    h('div', { class: 'bar' }, h('i', { style: `width:${next ? Math.round((xp - cur.xp) / (next.xp - cur.xp) * 100) : 100}%` }))),
+  h('div', { class: 'card stat' }, h('div', { class: 'v' }, `${xp} XP`), h('div', { class: 'l' }, `su ${maxXP} disponibili nei moduli pubblicati`)),
+  h('div', { class: 'card stat' }, h('div', { class: 'v' }, String(media)), h('div', { class: 'l' }, `media di tutte le consegne (${voti.length}), tentativi falliti inclusi`)),
+);
+
+const D = R.diagnosi || {};
+const diag = document.getElementById('diag');
+diag.append(h('p', { style: 'margin-top:0' }, D.nota || ''));
+if ((D.forza || []).length || (D.daRinforzare || []).length) {
+  diag.append(h('div', { class: 'grid-2' },
+    h('div', { class: 'callout good' }, h('span', { class: 'title' }, 'Punti di forza'), h('ul', {}, (D.forza || []).map((x) => h('li', {}, x)))),
+    h('div', { class: 'callout warn' }, h('span', { class: 'title' }, 'Da rinforzare'), h('ul', {}, (D.daRinforzare || []).map((x) => h('li', {}, x))))));
+}
+
+const path = document.getElementById('path');
+LAB_MODULES.forEach((m) => {
+  const st = Lab.moduleStatus(m.id);
+  path.append(h('li', { class: m.file ? 'ready' : 'locked' },
+    h('span', { class: 'num' }, m.num),
+    h('span', {}, m.file ? h('a', { href: m.file }, m.title) : h('b', {}, m.title), h('small', {}, m.sub)),
+    h('span', { class: 'tag', style: 'font-size:13px;color:var(--muted)' }, m.file ? `${st.label}${st.total ? ` · ${st.done}/${st.total}` : ''}` : 'in preparazione')));
+});
+
+const last = document.getElementById('last');
+const allEx = Object.fromEntries(Lab.allExercises().map((e) => [e.id, e]));
+if (!voti.length) last.append(h('p', { style: 'color:var(--muted)' }, 'Nessuna consegna. Il primo passo: M3 → esercizio E1.'));
+[...voti].reverse().slice(0, 8).forEach((v) => {
+  const ex = allEx[v.ex] || { title: v.ex, stars: 1 };
+  last.append(h('div', { class: 'card', style: 'padding:14px 18px' },
+    h('b', {}, `${v.voto}/10 · ${ex.title}`), ` — ${v.ex}, tentativo ${v.tentativo}, ${v.data}`,
+    h('div', { style: 'font-size:14.5px;margin-top:4px' }, v.verdetto),
+    v.feedback ? h('a', { href: v.feedback, style: 'font-size:14px' }, 'Correzione completa →') : null));
+});
+
+const got = new Set(R.badge || []);
+const badges = document.getElementById('badges');
+LAB_BADGES.forEach((b) => badges.append(h('div', { class: 'badge' + (got.has(b.id) ? '' : ' locked') }, h('div', { class: 'ic' }, b.ic), h('b', {}, b.name), b.how)));
+</script>
+</body>
+</html>

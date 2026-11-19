@@ -1,0 +1,920 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>M3 · Firestore</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-root=".." data-module="m3">
+<div class="lab">
+<nav class="lab-nav" id="lab-nav"></nav>
+<main class="lab-main">
+
+<div class="kicker">Modulo 3 · Firebase Firestore</div>
+<h1>Firestore: dove vivono i dati dei tuoi utenti</h1>
+<p class="lead">Collection, documenti, riferimenti e fotografie. Alla fine di questo modulo saprai dire, per ogni riga di <code>createUserDocumentFromAuth</code>, cosa c'è in memoria, cosa viaggia in rete e cosa finisce sul server.</p>
+<ul class="toc">
+  <li><a href="#problema">① Il problema</a></li>
+  <li><a href="#teoria">② Teoria</a></li>
+  <li><a href="#modello">③ Modello mentale</a></li>
+  <li><a href="#flusso">④ Flusso animato</a></li>
+  <li><a href="#dati">⑤ Forma dei dati</a></li>
+  <li><a href="#codice">⑥ Nel tuo codice</a></li>
+  <li><a href="#componenti">⑦ Nei componenti</a></li>
+  <li><a href="#documentazione">⑧ Doc ufficiale ↔ corso</a></li>
+  <li><a href="#errori">⑨ Errori tipici</a></li>
+  <li><a href="#verifica">⑩ Verifica</a></li>
+  <li><a href="#esercizi">⑪ Esercizi</a></li>
+</ul>
+
+<!-- ================================================================== -->
+<h2 id="problema"><span class="section-num">1</span>Il problema: Auth sa CHI sei, non COSA sei</h2>
+
+<p>Quando un utente fa login, Firebase Authentication ti restituisce un oggetto <code>user</code> con un <dfn data-term="uid">uid</dfn>, l'email e poco altro. Auth è un <b>sistema di identità</b>: verifica che tu sia tu. Non è fatto per conservare il nome che hai scelto in fase di registrazione, la data di iscrizione, gli indirizzi di spedizione o lo storico degli ordini.</p>
+<p>Per quello serve un <b>database</b>. In CRWN il database è Firestore, e il collegamento tra i due mondi è <b>uno solo</b>: l'<code>uid</code>.</p>
+
+<div class="card">
+<svg class="diagram" viewBox="0 0 900 300" role="img" aria-label="Auth e Firestore sono due sistemi separati collegati dall'uid">
+  <defs>
+    <marker id="ah-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" style="fill:var(--c-auth)"/></marker>
+    <marker id="ah-f" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" style="fill:var(--c-fs)"/></marker>
+  </defs>
+  <rect class="box react" x="20" y="95" width="200" height="110" rx="10"/>
+  <text x="120" y="130" text-anchor="middle" font-weight="700" class="t-react">La tua app React</text>
+  <text x="120" y="155" text-anchor="middle" font-size="13" class="muted">(nel browser)</text>
+  <text x="120" y="182" text-anchor="middle" font-size="13" class="mono">user.uid = "g7Hk2"</text>
+
+  <rect class="box auth" x="430" y="20" width="440" height="115" rx="10"/>
+  <text x="450" y="48" font-weight="700" class="t-auth">🔐 Firebase Authentication</text>
+  <text x="450" y="72" font-size="13" class="mono">uid: "g7Hk2"   email: "leo@mail.it"</text>
+  <text x="450" y="94" font-size="13" class="mono">provider: google.com   password: (hash, mai visibile)</text>
+  <text x="450" y="118" font-size="12.5" class="muted">Risponde alla domanda: "chi sei? sei davvero tu?"</text>
+
+  <rect class="box fs" x="430" y="165" width="440" height="115" rx="10"/>
+  <text x="450" y="193" font-weight="700" class="t-fs">🗄️ Cloud Firestore</text>
+  <text x="450" y="217" font-size="13" class="mono">users / <tspan font-weight="700">g7Hk2</tspan> → { displayName, email, createdAt }</text>
+  <text x="450" y="239" font-size="13" class="mono">(domani: carrello, ordini, indirizzi…)</text>
+  <text x="450" y="263" font-size="12.5" class="muted">Risponde alla domanda: "cosa sappiamo di te?"</text>
+
+  <path class="wire wire-auth" d="M220 130 C320 130 330 78 428 78" marker-end="url(#ah-a)"/>
+  <text x="300" y="98" font-size="12" class="t-auth">signInWith…()</text>
+  <path class="wire wire-fs" d="M220 170 C320 170 330 222 428 222" marker-end="url(#ah-f)"/>
+  <text x="290" y="218" font-size="12" class="t-fs">doc(db,'users',uid)</text>
+  <path d="M650 135 V165" stroke-dasharray="4 4" class="wire" style="stroke:var(--ink)"/>
+  <rect x="598" y="139" width="104" height="22" rx="11" style="fill:var(--ink)"/>
+  <text x="650" y="154" text-anchor="middle" font-size="12" font-weight="700" style="fill:var(--bg)">ponte: uid</text>
+</svg>
+</div>
+
+<div class="callout"><span class="title">L'idea da portarsi a casa</span>
+Sono <b>due servizi diversi</b>, su server diversi, con dati diversi. Firestore non sa niente del login: sei <b>tu</b>, nel codice, a creare un documento il cui ID è uguale all'<code>uid</code> di Auth. Se non lo fai, l'utente esiste in Auth ma per il tuo database è un fantasma. È proprio quello che fa <code>createUserDocumentFromAuth</code>.</div>
+
+<!-- ================================================================== -->
+<h2 id="teoria"><span class="section-num">2</span>Teoria e terminologia</h2>
+
+<h3>Che tipo di database è Firestore</h3>
+<p>Firestore è un <dfn data-term="nosql">database NoSQL documentale</dfn> gestito da Google: non installi niente e non scrivi un server. Il tuo frontend ci parla direttamente attraverso l'<dfn data-term="sdk">SDK</dfn> (il pacchetto <code>firebase</code>). Se hai visto i database SQL, il confronto aiuta:</p>
+<div class="table-wrap"><table>
+<tr><th>SQL (tabelle)</th><th>Firestore (documenti)</th><th>In CRWN</th></tr>
+<tr><td>Tabella</td><td><dfn data-term="collection">Collection</dfn></td><td><code>users</code></td></tr>
+<tr><td>Riga</td><td><dfn data-term="document">Documento</dfn></td><td><code>users/g7Hk2</code></td></tr>
+<tr><td>Colonna (uguale per tutte le righe)</td><td><dfn data-term="field">Campo</dfn> (ogni documento può avere i suoi)</td><td><code>displayName</code>, <code>email</code>, <code>createdAt</code></td></tr>
+<tr><td>Chiave primaria</td><td>ID del documento</td><td>l'<code>uid</code> di Auth</td></tr>
+<tr><td>JOIN tra tabelle</td><td>Non esiste: si legge più volte o si duplicano i dati</td><td>—</td></tr>
+</table></div>
+
+<h3>La regola d'oro dei percorsi</h3>
+<p>Ogni dato ha un <dfn data-term="path">percorso</dfn> che alterna <b>sempre</b> collection e documento. Una collection contiene <b>solo</b> documenti, e un documento contiene campi e, se serve, <dfn data-term="subcollection">sotto-collection</dfn>.</p>
+<pre class="code">users                         // 1 segmento  → dispari → COLLECTION
+users/g7Hk2                   // 2 segmenti  → pari    → DOCUMENTO
+users/g7Hk2/orders            // 3 segmenti  → dispari → COLLECTION
+users/g7Hk2/orders/o-001      // 4 segmenti  → pari    → DOCUMENTO
+users/g7Hk2/displayName       // ✘ SBAGLIATO: un campo non è un segmento del percorso!</pre>
+
+<h3>Le quattro funzioni che usi (SDK modulare)</h3>
+<div class="table-wrap"><table>
+<tr><th>Funzione</th><th>Cosa riceve</th><th>Cosa restituisce</th><th>Va in rete?</th></tr>
+<tr><td><code>getFirestore()</code></td><td>(l'app Firebase inizializzata)</td><td><dfn data-term="db">db</dfn>: l'istanza del database</td><td>No</td></tr>
+<tr><td><code>doc(db, 'users', uid)</code></td><td>db + segmenti del percorso</td><td><dfn data-term="docref">DocumentReference</dfn>: l'indirizzo</td><td><b>No</b>: è sincrona</td></tr>
+<tr><td><code>getDoc(ref)</code></td><td>un DocumentReference</td><td><dfn data-term="promise">Promise</dfn> di <dfn data-term="snapshot">DocumentSnapshot</dfn></td><td><b>Sì</b>: serve <dfn data-term="await">await</dfn></td></tr>
+<tr><td><code>setDoc(ref, dati)</code></td><td>riferimento + oggetto</td><td>Promise&lt;void&gt;</td><td><b>Sì</b>: serve await</td></tr>
+</table></div>
+<p>Più avanti incontrerai anche <dfn data-term="updatedoc">updateDoc</dfn> (modifica solo alcuni campi), <code>collection()</code>, <code>getDocs()</code> e <code>writeBatch()</code>. La logica resta la stessa: prima costruisci un <b>indirizzo</b>, poi fai un'<b>operazione</b> su quell'indirizzo.</p>
+
+<div class="callout warn"><span class="title">Perché "modulare"?</span>
+Nell'SDK v9 e successivi (tu hai il pacchetto <code>firebase</code> 13.x) non si scrive più <code>db.collection('users').doc(uid).get()</code> a catena, come nei vecchi tutorial. Si importano <b>funzioni singole</b>: <code>doc(db, …)</code>, <code>getDoc(ref)</code>. Il motivo è il <b>tree-shaking</b>: il bundler include nel bundle solo le funzioni che importi davvero, quindi l'app è più leggera. Se trovi online codice "a catena", è della vecchia API.</div>
+
+<h3>Tipi di dato e una trappola</h3>
+<p>Un campo può contenere stringhe, numeri, booleani, <code>null</code>, array, mappe (oggetti annidati), riferimenti ad altri documenti e <dfn data-term="timestamp">Timestamp</dfn>. La trappola sono le date: <b>quello che scrivi non è quello che rileggi</b>.</p>
+<div class="grid-2">
+  <div class="card"><b>Scrivi</b><pre class="code">setDoc(ref, { createdAt: new Date() })</pre>un oggetto <code>Date</code> di JavaScript</div>
+  <div class="card"><b>Rileggi</b><pre class="code">snap.data().createdAt         // Timestamp {seconds, nanoseconds}
+snap.data().createdAt.toDate() // Date</pre>un <code>Timestamp</code> di Firestore</div>
+</div>
+<p>Altro dettaglio: <code>undefined</code> <b>non è un valore ammesso</b>. Se un campo vale <code>undefined</code>, <code>setDoc</code> lancia un errore. <code>null</code> invece è accettato.</p>
+
+<h3>Sicurezza: chi protegge davvero il database</h3>
+<p>Nel tuo <code>firebase.utils.js</code> c'è un <code>apiKey</code> in chiaro. <b>È normale</b>: per Firebase l'apiKey identifica il <i>progetto</i>, non dà permessi. Chiunque apra i DevTools sul tuo sito la vede comunque. Cosa impedisce allora a un estraneo di leggere i documenti di tutti gli utenti? Le <dfn data-term="rules">Security Rules</dfn>, che vengono valutate <b>sul server</b> a ogni richiesta:</p>
+<pre class="code">rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId} {
+      // ognuno legge e scrive SOLO il proprio documento
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}</pre>
+<div class="callout bad"><span class="title">Controlla le tue regole</span>
+Nei corsi si crea spesso il database in "test mode", cioè con tutto aperto a tutti fino a una data di scadenza. Quando scade, ogni lettura e scrittura fallisce con <code>permission-denied</code> e sembra che "il codice si sia rotto da solo". Vai in Console Firebase → Firestore → Regole e guarda cosa c'è scritto.</div>
+
+<!-- ================================================================== -->
+<h2 id="modello"><span class="section-num">3</span>Modello mentale: l'archivio</h2>
+
+<div class="card analogy"><div class="icon">🗄️</div><div>
+<b>Firestore è un grande archivio.</b> Il <code>db</code> è l'archivio intero. Una <b>collection</b> è un cassetto con un'etichetta (<code>users</code>). Un <b>documento</b> è una cartella nel cassetto, con un'etichetta sua (l'ID, <code>g7Hk2</code>). I <b>campi</b> sono i fogli dentro la cartella. Una <b>sotto-collection</b> è un piccolo cassetto attaccato alla cartella.<br><br>
+L'<b>etichetta</b> della cartella (l'ID) non è uno dei fogli: per questo <code>data()</code> non contiene l'id.
+</div></div>
+
+<div class="card">
+<svg class="diagram" viewBox="0 0 900 400" role="img" aria-label="Albero dell'archivio Firestore: db, collection users, documenti, campi, sotto-collection">
+  <rect class="box" x="20" y="170" width="120" height="60" rx="10" style="stroke:var(--ink)"/>
+  <text x="80" y="197" text-anchor="middle" font-weight="700">db</text>
+  <text x="80" y="216" text-anchor="middle" font-size="12" class="muted">l'archivio</text>
+
+  <path class="wire wire-fs" d="M140 200 C175 200 175 110 210 110"/>
+  <path class="wire wire-fs" d="M140 200 C175 200 175 330 210 330"/>
+
+  <rect class="box fs" x="210" y="85" width="150" height="50" rx="8"/>
+  <text x="285" y="108" text-anchor="middle" font-weight="700" class="t-fs">📁 users</text>
+  <text x="285" y="126" text-anchor="middle" font-size="11.5" class="mono muted">collection · 1 segm.</text>
+  <rect class="box fs" x="210" y="305" width="150" height="50" rx="8"/>
+  <text x="285" y="328" text-anchor="middle" font-weight="700" class="t-fs">📁 categories</text>
+  <text x="285" y="346" text-anchor="middle" font-size="11.5" class="mono muted">collection (in futuro)</text>
+
+  <path class="wire wire-fs" d="M360 110 C390 110 390 55 420 55"/>
+  <path class="wire wire-fs" d="M360 110 C390 110 390 200 420 200"/>
+
+  <rect class="box" x="420" y="20" width="250" height="108" rx="8" style="stroke:var(--c-fs)"/>
+  <text x="435" y="42" font-weight="700">📄 g7Hk2 <tspan font-size="11.5" class="mono muted" font-weight="400">← ID = uid · 2 segm.</tspan></text>
+  <text x="435" y="66" font-size="12.5" class="mono">displayName: "Leandro L."</text>
+  <text x="435" y="86" font-size="12.5" class="mono">email: "leo@mail.it"</text>
+  <text x="435" y="106" font-size="12.5" class="mono">createdAt: Timestamp</text>
+  <text x="435" y="122" font-size="11" class="muted">campi = fogli nella cartella</text>
+
+  <rect class="box" x="420" y="160" width="250" height="80" rx="8" style="stroke:var(--c-fs)"/>
+  <text x="435" y="182" font-weight="700">📄 e9Pq1</text>
+  <text x="435" y="204" font-size="12.5" class="mono">displayName: "Leo"</text>
+  <text x="435" y="224" font-size="12.5" class="mono">email: "leo2@mail.it"  …</text>
+
+  <path class="wire wire-fs" d="M670 74 C700 74 700 74 720 74" stroke-dasharray="5 4"/>
+  <rect class="box fs" x="720" y="50" width="160" height="50" rx="8"/>
+  <text x="800" y="72" text-anchor="middle" font-weight="700" class="t-fs">📁 orders</text>
+  <text x="800" y="90" text-anchor="middle" font-size="11.5" class="mono muted">sotto-coll. · 3 segm.</text>
+  <path class="wire wire-fs" d="M800 100 V130"/>
+  <rect class="box" x="720" y="130" width="160" height="44" rx="8" style="stroke:var(--c-fs)"/>
+  <text x="800" y="157" text-anchor="middle" font-size="12.5" class="mono">📄 o-001 · 4 segm.</text>
+
+  <text x="420" y="290" font-size="13" font-weight="700">Percorsi:</text>
+  <text x="420" y="312" font-size="12.5" class="mono">users                        → cassetto</text>
+  <text x="420" y="332" font-size="12.5" class="mono">users/g7Hk2                  → cartella</text>
+  <text x="420" y="352" font-size="12.5" class="mono">users/g7Hk2/orders           → cassettino della cartella</text>
+  <text x="420" y="372" font-size="12.5" class="mono">users/g7Hk2/orders/o-001     → cartella nel cassettino</text>
+</svg>
+</div>
+
+<h3>Indirizzo e fotografia: la distinzione più importante del modulo</h3>
+<div class="card">
+<svg class="diagram" viewBox="0 0 900 260" role="img" aria-label="DocumentReference è un indirizzo, DocumentSnapshot è una fotografia">
+  <defs><marker id="ah-f2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" style="fill:var(--c-fs)"/></marker></defs>
+  <rect class="box" x="20" y="30" width="270" height="200" rx="10" style="stroke:var(--ink)"/>
+  <text x="40" y="62" font-size="26">📮</text>
+  <text x="80" y="58" font-weight="700">DocumentReference</text>
+  <text x="80" y="76" font-size="12.5" class="muted">= un INDIRIZZO</text>
+  <text x="40" y="110" font-size="12.5" class="mono">const ref = doc(db,'users',uid)</text>
+  <text x="40" y="140" font-size="13">✔ sincrono, nessuna rete</text>
+  <text x="40" y="162" font-size="13">✔ esiste anche se la casa non c'è</text>
+  <text x="40" y="184" font-size="13">✘ non contiene i dati</text>
+  <text x="40" y="206" font-size="13">ha: <tspan class="mono">id, path, parent</tspan></text>
+
+  <path class="wire wire-fs" d="M290 130 H600" marker-end="url(#ah-f2)"/>
+  <text x="445" y="112" text-anchor="middle" font-size="13" font-weight="700" class="t-fs">await getDoc(ref)</text>
+  <text x="445" y="152" text-anchor="middle" font-size="12" class="muted">vai all'indirizzo, scatta una foto, torna</text>
+  <text x="445" y="170" text-anchor="middle" font-size="12" class="muted">(viaggio di rete: millisecondi… o secondi)</text>
+
+  <rect class="box fs" x="610" y="30" width="270" height="200" rx="10"/>
+  <text x="630" y="62" font-size="26">📸</text>
+  <text x="670" y="58" font-weight="700">DocumentSnapshot</text>
+  <text x="670" y="76" font-size="12.5" class="muted">= una FOTOGRAFIA</text>
+  <text x="630" y="110" font-size="12.5" class="mono">snap.exists()  → true / false</text>
+  <text x="630" y="132" font-size="12.5" class="mono">snap.data()    → {campi} / undefined</text>
+  <text x="630" y="154" font-size="12.5" class="mono">snap.id        → "g7Hk2"</text>
+  <text x="630" y="184" font-size="13">⚠ è una foto: se il documento</text>
+  <text x="630" y="204" font-size="13">cambia dopo, la foto NO</text>
+</svg>
+</div>
+<div class="callout"><span class="title">Come ragionarci</span>
+Davanti a una variabile Firestore chiediti sempre: <i>"questa è un indirizzo o una fotografia?"</i>. Su un indirizzo puoi <b>fare operazioni</b> (leggere, scrivere). Da una fotografia puoi <b>guardare i dati</b> di un istante passato. Metà dei bug con Firestore nascono dal confondere le due cose.</div>
+
+<!-- ================================================================== -->
+<h2 id="flusso"><span class="section-num">4</span>Flusso animato: <code>createUserDocumentFromAuth</code></h2>
+<p>Usa <b>Avanti ▶</b> (o le frecce della tastiera dopo aver cliccato il riquadro). Ogni passo mostra cosa si accende, la riga di codice in esecuzione e il contenuto delle variabili. Prova entrambe le varianti: il confronto è il punto della lezione.</p>
+
+<template id="svg-flow">
+<svg class="diagram" viewBox="0 0 900 340" role="img" aria-label="Flusso di createUserDocumentFromAuth tra componente React, funzione e Firestore">
+  <defs>
+    <marker id="m-r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" style="fill:var(--c-react)"/></marker>
+    <marker id="m-f" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" style="fill:var(--c-fs)"/></marker>
+  </defs>
+  <g data-node="react">
+    <rect class="box react" x="15" y="40" width="185" height="96" rx="10"/>
+    <text x="107" y="68" text-anchor="middle" font-weight="700" class="t-react">SignInForm</text>
+    <text x="107" y="90" text-anchor="middle" font-size="12" class="mono">signInWithGoogle()</text>
+    <text x="107" y="112" text-anchor="middle" font-size="12" class="muted">componente React</text>
+  </g>
+  <rect data-node="fn" class="box" x="245" y="14" width="350" height="312" rx="12" style="stroke:var(--ink);stroke-dasharray:6 4;fill:none"/>
+  <text data-node="fn" x="260" y="38" font-size="13" font-weight="700" class="mono">createUserDocumentFromAuth()</text>
+  <g data-node="guard"><rect class="box" x="265" y="52" width="310" height="42" rx="7"/><text x="280" y="78" font-size="13" class="mono">① if (!userAuth) return</text></g>
+  <g data-node="ref"><rect class="box" x="265" y="104" width="310" height="42" rx="7"/><text x="280" y="130" font-size="13" class="mono">② 📮 doc(db,'users',uid)</text></g>
+  <g data-node="snap"><rect class="box" x="265" y="156" width="310" height="42" rx="7"/><text x="280" y="182" font-size="13" class="mono">③ 📸 await getDoc(ref)</text></g>
+  <g data-node="check"><rect class="box" x="265" y="208" width="310" height="42" rx="7"/><text x="280" y="234" font-size="13" class="mono">④ !snapshot.exists() ? setDoc</text></g>
+  <g data-node="ret"><rect class="box" x="265" y="260" width="310" height="42" rx="7"/><text x="280" y="286" font-size="13" class="mono">⑤ return userDocRef</text></g>
+
+  <g data-node="fs">
+    <rect class="box fs" x="680" y="40" width="205" height="270" rx="12"/>
+    <text x="700" y="66" font-weight="700" class="t-fs">🗄️ Firestore</text>
+    <text x="700" y="84" font-size="11.5" class="muted">server Google, via rete</text>
+  </g>
+  <g data-node="col"><rect class="box" x="697" y="98" width="171" height="34" rx="6" style="stroke:var(--c-fs)"/><text x="710" y="120" font-size="13" class="mono">📁 users</text></g>
+  <g data-node="doc">
+    <rect class="box" x="712" y="142" width="156" height="92" rx="6" style="stroke:var(--c-fs)"/>
+    <text x="722" y="162" font-size="12.5" font-weight="700" class="mono">📄 g7Hk2</text>
+    <text x="722" y="182" font-size="11.5" class="mono">displayName</text>
+    <text x="722" y="200" font-size="11.5" class="mono">email</text>
+    <text x="722" y="218" font-size="11.5" class="mono">createdAt</text>
+  </g>
+
+  <path data-node="w-call" data-flow class="wire wire-react" d="M200 80 H262" marker-end="url(#m-r)"/>
+  <path data-node="w-read" data-flow class="wire wire-fs" d="M575 168 C630 168 630 115 694 115" marker-end="url(#m-f)"/>
+  <text data-node="w-read" x="600" y="140" font-size="11" class="t-fs">richiesta</text>
+  <path data-node="w-reply" data-flow class="wire wire-fs" d="M694 190 C640 190 630 186 578 186" marker-end="url(#m-f)"/>
+  <text data-node="w-reply" x="606" y="205" font-size="11" class="t-fs">foto</text>
+  <path data-node="w-write" data-flow class="wire wire-fs" d="M575 229 C640 229 650 210 708 205" marker-end="url(#m-f)"/>
+  <text data-node="w-write" x="604" y="250" font-size="11" class="t-fs">setDoc</text>
+  <path data-node="w-ret" data-flow class="wire wire-react" d="M265 281 C200 281 140 220 108 140" marker-end="url(#m-r)"/>
+  <text data-node="w-ret" x="130" y="250" font-size="11" class="t-react">userDocRef</text>
+</svg>
+</template>
+
+<pre class="code" id="code-cudfa" hidden>export const createUserDocumentFromAuth = async (
+  userAuth,
+  additionalInformation = {}
+) => {
+  if (!userAuth) return;
+
+  const userDocRef = doc(db, 'users', userAuth.uid);
+
+  const userSnapshot = await getDoc(userDocRef);
+
+  if (!userSnapshot.exists()) {
+    const { displayName, email } = userAuth;
+    const createdAt = new Date();
+
+    try {
+      await setDoc(userDocRef, {
+        displayName,
+        email,
+        createdAt,
+        ...additionalInformation,
+      });
+    } catch (error) {
+      console.log('error creating the user', error.message);
+    }
+  }
+
+  return userDocRef;
+};</pre>
+
+<div id="flow"></div>
+
+<div class="callout good"><span class="title">Cosa devi aver notato confrontando le due varianti</span>
+La funzione è <dfn data-term="idempotente">idempotente</dfn>: puoi chiamarla a ogni login senza paura. Il primo accesso fa <b>1 lettura + 1 scrittura</b>, tutti i successivi fanno <b>1 lettura + 0 scritture</b>. È la lettura (la "foto") che decide se scrivere. Senza quella foto, ogni login sovrascriverebbe il profilo.</div>
+
+<!-- ================================================================== -->
+<h2 id="dati"><span class="section-num">5</span>Forma dei dati: gli oggetti veri</h2>
+<p>Ecco gli oggetti come li vedresti con un <code>console.log</code>, semplificati ai campi che contano. Apri e chiudi i nodi come nei DevTools.</p>
+<div class="grid-2">
+  <div class="card"><b class="pill auth">AUTH</b> <b>userAuth</b> (cioè <code>response.user</code>)<div id="insp-user" style="margin-top:8px"></div></div>
+  <div class="card"><b class="pill fs">FIRESTORE</b> <b>userDocRef</b> (dopo <code>doc()</code>)<div id="insp-ref" style="margin-top:8px"></div></div>
+  <div class="card"><b class="pill fs">FIRESTORE</b> <b>userSnapshot</b> · documento esistente<div id="insp-snap" style="margin-top:8px"></div></div>
+  <div class="card"><b class="pill fs">FIRESTORE</b> <b>userSnapshot</b> · documento inesistente<div id="insp-snap0" style="margin-top:8px"></div></div>
+</div>
+<div class="callout warn"><span class="title">Nota che</span>
+<code>exists</code> e <code>data</code> sono <b>metodi</b> (ƒ), non proprietà. <code>snap.exists</code> senza parentesi è una funzione, e una funzione in un <code>if</code> vale sempre <code>true</code>. Il codice non dà errore: semplicemente sbaglia ogni volta.</div>
+
+<!-- ================================================================== -->
+<h2 id="codice"><span class="section-num">6</span>Nel tuo codice: <code>firebase.utils.js</code></h2>
+<p>Passa il mouse (o tocca) su ogni punto della lista per evidenziare le righe corrispondenti.</p>
+<div class="annot">
+<pre class="code">import { initializeApp } from 'firebase/app';
+import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
+
+const firebaseApp = initializeApp(firebaseConfig);
+
+export const db = getFirestore();
+
+export const createUserDocumentFromAuth = async (
+  userAuth,
+  additionalInformation = {}
+) => {
+  if (!userAuth) return;
+  const userDocRef = doc(db, 'users', userAuth.uid);
+  const userSnapshot = await getDoc(userDocRef);
+
+  if (!userSnapshot.exists()) {
+    const { displayName, email } = userAuth;
+    const createdAt = new Date();
+    try {
+      await setDoc(userDocRef, {
+        displayName,
+        email,
+        createdAt,
+        ...additionalInformation,
+      });
+    } catch (error) {
+      console.log('error creating the user', error.message);
+    }
+  }
+  return userDocRef;
+};</pre>
+<ol>
+  <li data-lines="2"><b>Import modulari.</b> Importi solo 4 funzioni: è quello che rende possibile il tree-shaking.</li>
+  <li data-lines="4,6"><b>Ordine obbligato.</b> Prima <code>initializeApp</code>, poi <code>getFirestore()</code>. Senza argomenti, <code>getFirestore</code> usa l'app di default appena inizializzata. <code>db</code> viene creato <b>una volta</b> e condiviso da tutta l'app (singleton).</li>
+  <li data-lines="8-11"><b>Parametro di default.</b> <code>additionalInformation = {}</code> significa che se non passi niente vale un oggetto vuoto, così lo spread alla riga 24 non esplode mai.</li>
+  <li data-lines="12"><b>Guardia.</b> Esce subito se non c'è un utente. Restituisce <code>undefined</code>.</li>
+  <li data-lines="13"><b>Indirizzo.</b> <code>uid</code> come ID del documento: è il ponte con Auth. Non c'è nessuna chiamata di rete.</li>
+  <li data-lines="14"><b>Foto.</b> L'unica lettura di rete. <code>await</code> sospende la funzione finché non arriva la risposta.</li>
+  <li data-lines="16"><b>Decisione.</b> Notare il <code>!</code>: entra nell'if solo se il documento <b>non</b> esiste.</li>
+  <li data-lines="17-18"><b>Destructuring e data.</b> Estrae due campi da <code>userAuth</code>. <code>new Date()</code> diventerà un Timestamp sul server.</li>
+  <li data-lines="21-24"><b>Ordine dello spread.</b> <code>...additionalInformation</code> viene <b>dopo</b>, quindi vince. È così che il <code>displayName</code> del form di sign-up sostituisce il <code>null</code> di Auth.</li>
+  <li data-lines="20,26-28"><b>try/catch con await.</b> L'errore della scrittura viene intercettato solo perché c'è <code>await</code>. Senza, la Promise fallirebbe "altrove" e il catch non la vedrebbe mai.</li>
+  <li data-lines="30"><b>Ritorno.</b> Restituisce l'indirizzo, riutilizzabile da chi chiama.</li>
+</ol>
+</div>
+
+<!-- ================================================================== -->
+<h2 id="componenti"><span class="section-num">7</span>Nei componenti: come viaggiano i dati nella tua app</h2>
+<p>Finora abbiamo guardato una funzione isolata. Nella tua app però i dati partono da un <b>componente React</b>, passano per <code>firebase.utils.js</code>, entrano nell'SDK, arrivano ai server e poi tornano indietro. Per capire davvero devi vedere <b>tutti i livelli insieme</b>.</p>
+
+<h3>I quattro livelli (e chi importa cosa)</h3>
+<div class="card">
+<svg class="diagram" viewBox="0 0 900 330" role="img" aria-label="Quattro livelli: componenti React, firebase.utils.js, SDK firebase, server">
+  <defs><marker id="ah-n" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" style="fill:var(--muted)"/></marker></defs>
+  <text x="115" y="24" text-anchor="middle" font-size="12" font-weight="700" class="t-react">① COMPONENTI REACT</text>
+  <text x="345" y="24" text-anchor="middle" font-size="12" font-weight="700">② ASTRAZIONE</text>
+  <text x="590" y="24" text-anchor="middle" font-size="12" font-weight="700" class="muted">③ SDK (pacchetto firebase)</text>
+  <text x="815" y="24" text-anchor="middle" font-size="12" font-weight="700" class="muted">④ SERVER GOOGLE</text>
+
+  <rect class="box react" x="15" y="40" width="200" height="44" rx="8"/><text x="115" y="67" text-anchor="middle" font-size="13" class="mono">Authentication</text>
+  <path class="wire wire-react" d="M70 84 V110"/><path class="wire wire-react" d="M160 84 V110"/>
+  <rect class="box react" x="15" y="110" width="95" height="60" rx="8"/><text x="62" y="136" text-anchor="middle" font-size="12" class="mono">SignIn</text><text x="62" y="154" text-anchor="middle" font-size="12" class="mono">Form</text>
+  <rect class="box react" x="120" y="110" width="95" height="60" rx="8"/><text x="167" y="136" text-anchor="middle" font-size="12" class="mono">SignUp</text><text x="167" y="154" text-anchor="middle" font-size="12" class="mono">Form</text>
+  <path class="wire wire-react" d="M62 170 V196"/><path class="wire wire-react" d="M167 170 V196"/>
+  <rect class="box react" x="15" y="196" width="200" height="44" rx="8"/><text x="115" y="223" text-anchor="middle" font-size="12" class="mono">FormInput · Button</text>
+  <text x="115" y="268" text-anchor="middle" font-size="12" class="muted">sanno di FORM e STATE</text>
+  <text x="115" y="286" text-anchor="middle" font-size="12" class="muted">non sanno niente di Firebase</text>
+
+  <rect class="box" x="240" y="40" width="210" height="200" rx="10" style="stroke:var(--ink);stroke-dasharray:6 4"/>
+  <text x="345" y="62" text-anchor="middle" font-size="12.5" font-weight="700" class="mono">firebase.utils.js</text>
+  <text x="255" y="92" font-size="11.5" class="mono">signInWithGooglePopup</text>
+  <text x="255" y="114" font-size="11.5" class="mono">createAuthUserWith…</text>
+  <text x="255" y="136" font-size="11.5" class="mono">signInAuthUserWith…</text>
+  <text x="255" y="158" font-size="11.5" class="mono">createUserDocumentFromAuth</text>
+  <text x="255" y="186" font-size="11.5" class="mono">auth · db · googleProvider</text>
+  <text x="345" y="268" text-anchor="middle" font-size="12" class="muted">traduce le richieste dei componenti</text>
+  <text x="345" y="286" text-anchor="middle" font-size="12" class="muted">in chiamate all'SDK</text>
+
+  <rect class="box auth" x="485" y="40" width="210" height="90" rx="10"/>
+  <text x="500" y="62" font-size="12" font-weight="700" class="mono t-auth">firebase/auth</text>
+  <text x="500" y="84" font-size="11" class="mono">signInWithPopup</text>
+  <text x="500" y="102" font-size="11" class="mono">createUserWithEmailAndPassword</text>
+  <text x="500" y="120" font-size="11" class="mono">signInWithEmailAndPassword</text>
+  <rect class="box fs" x="485" y="150" width="210" height="90" rx="10"/>
+  <text x="500" y="172" font-size="12" font-weight="700" class="mono t-fs">firebase/firestore</text>
+  <text x="500" y="196" font-size="11" class="mono">getFirestore · doc</text>
+  <text x="500" y="216" font-size="11" class="mono">getDoc · setDoc</text>
+  <text x="590" y="268" text-anchor="middle" font-size="12" class="muted">la libreria di Google:</text>
+  <text x="590" y="286" text-anchor="middle" font-size="12" class="muted">è la parte che trovi nella doc ufficiale</text>
+
+  <rect class="box auth" x="730" y="40" width="160" height="90" rx="10"/><text x="810" y="80" text-anchor="middle" font-weight="700" class="t-auth">🔐 Auth</text><text x="810" y="100" text-anchor="middle" font-size="11.5" class="muted">via rete</text>
+  <rect class="box fs" x="730" y="150" width="160" height="90" rx="10"/><text x="810" y="190" text-anchor="middle" font-weight="700" class="t-fs">🗄️ Firestore</text><text x="810" y="210" text-anchor="middle" font-size="11.5" class="muted">via rete</text>
+
+  <path class="wire" d="M215 140 H238" marker-end="url(#ah-n)" style="stroke:var(--muted)"/>
+  <path class="wire" d="M450 85 H483" marker-end="url(#ah-n)" style="stroke:var(--muted)"/>
+  <path class="wire" d="M450 195 H483" marker-end="url(#ah-n)" style="stroke:var(--muted)"/>
+  <path class="wire wire-auth" d="M695 85 H728" marker-end="url(#ah-n)"/>
+  <path class="wire wire-fs" d="M695 195 H728" marker-end="url(#ah-n)"/>
+  <text x="450" y="318" text-anchor="middle" font-size="12.5">Le frecce sono gli <tspan font-weight="700">import</tspan>: ogni livello conosce SOLO quello alla sua destra.</text>
+</svg>
+</div>
+
+<div class="table-wrap"><table>
+<tr><th>Chi</th><th>Conosce</th><th>NON conosce</th></tr>
+<tr><td><span class="pill react">SignUpForm</span></td><td>lo state <code>formFields</code>, il form, i messaggi di errore per l'utente</td><td><code>auth</code>, <code>db</code>, <code>doc()</code>, il percorso <code>users/…</code></td></tr>
+<tr><td><code>firebase.utils.js</code></td><td><code>auth</code>, <code>db</code>, il provider Google, la struttura <code>users/{uid}</code></td><td>che esiste un form, cos'è <code>formFields</code>, cosa mostra la UI</td></tr>
+<tr><td>SDK <code>firebase/*</code></td><td>come parlare con i server Google</td><td>che la tua app si chiama CRWN o che ha "utenti"</td></tr>
+</table></div>
+
+<div class="callout"><span class="title">Perché questa separazione conta</span>
+Se domani il negozio passasse da Firebase a un altro backend, cambieresti <b>un solo file</b> (<code>firebase.utils.js</code>), non dieci componenti. Questa idea ha un nome, <b>separazione delle responsabilità</b>: ogni livello ha un solo motivo per cambiare. Una conseguenza pratica: <b>nessun componente dovrebbe importare direttamente da <code>'firebase/…'</code></b>.</div>
+
+<h3>Il viaggio completo, livello per livello</h3>
+<p>Due varianti. <b>Sign-up email</b>: l'utente compila il form e preme "Sign Up". <b>Google</b>: l'utente preme "Google sign in". Guarda il pannello dati: a ogni passaggio di livello <b>la forma del dato cambia</b>.</p>
+
+<template id="svg-comp">
+<svg class="diagram" viewBox="0 0 900 360" role="img" aria-label="Flusso dei dati dal form a Firebase e ritorno">
+  <defs>
+    <marker id="c-r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" style="fill:var(--c-react)"/></marker>
+    <marker id="c-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" style="fill:var(--c-auth)"/></marker>
+    <marker id="c-f" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" style="fill:var(--c-fs)"/></marker>
+  </defs>
+  <g data-node="form">
+    <rect class="box react" x="15" y="40" width="200" height="150" rx="10"/>
+    <text x="115" y="66" text-anchor="middle" font-weight="700" class="t-react">SignUpForm</text>
+    <text x="115" y="84" text-anchor="middle" font-size="11.5" class="mono muted">/ SignInForm</text>
+    <text x="115" y="118" text-anchor="middle" font-size="12" class="mono">state: formFields</text>
+    <text x="115" y="140" text-anchor="middle" font-size="12" class="mono">handleSubmit()</text>
+    <text x="115" y="160" text-anchor="middle" font-size="12" class="mono">signInWithGoogle()</text>
+  </g>
+  <g data-node="input">
+    <rect class="box react" x="15" y="230" width="200" height="56" rx="10"/>
+    <text x="115" y="254" text-anchor="middle" font-size="12.5" class="mono">FormInput ×4 · Button</text>
+    <text x="115" y="274" text-anchor="middle" font-size="11.5" class="muted">value / onChange / onClick</text>
+  </g>
+  <rect class="box" x="240" y="30" width="235" height="300" rx="10" style="stroke:var(--ink);stroke-dasharray:6 4;fill:none"/>
+  <text x="357" y="22" text-anchor="middle" font-size="12" font-weight="700" class="mono">firebase.utils.js</text>
+  <g data-node="u-auth">
+    <rect class="box" x="255" y="55" width="205" height="70" rx="8"/>
+    <text x="268" y="80" font-size="11.5" class="mono">createAuthUserWith…()</text>
+    <text x="268" y="100" font-size="11.5" class="mono muted">o signInWithGooglePopup()</text>
+  </g>
+  <g data-node="u-doc">
+    <rect class="box" x="255" y="195" width="205" height="70" rx="8"/>
+    <text x="268" y="222" font-size="11.5" class="mono">createUserDocument</text>
+    <text x="268" y="242" font-size="11.5" class="mono">FromAuth(user, extra)</text>
+  </g>
+  <g data-node="sdk-auth">
+    <rect class="box auth" x="505" y="55" width="205" height="70" rx="8"/>
+    <text x="518" y="80" font-size="11" class="mono">createUserWithEmail…()</text>
+    <text x="518" y="100" font-size="11" class="mono muted">o signInWithPopup()</text>
+  </g>
+  <g data-node="sdk-fs">
+    <rect class="box fs" x="505" y="195" width="205" height="70" rx="8"/>
+    <text x="518" y="222" font-size="11.5" class="mono">doc() · getDoc()</text>
+    <text x="518" y="242" font-size="11.5" class="mono">setDoc()</text>
+  </g>
+  <g data-node="auth"><rect class="box auth" x="745" y="45" width="140" height="90" rx="10"/><text x="815" y="85" text-anchor="middle" font-weight="700" class="t-auth">🔐 Auth</text><text x="815" y="105" text-anchor="middle" font-size="11" class="muted">server</text></g>
+  <g data-node="fs"><rect class="box fs" x="745" y="185" width="140" height="90" rx="10"/><text x="815" y="225" text-anchor="middle" font-weight="700" class="t-fs">🗄️ Firestore</text><text x="815" y="245" text-anchor="middle" font-size="11" class="muted">server</text></g>
+
+  <path data-node="w-type" data-flow class="wire wire-react" d="M85 230 V192" marker-end="url(#c-r)"/>
+  <text data-node="w-type" x="30" y="214" font-size="11" class="t-react">onChange</text>
+  <path data-node="w-reset" data-flow class="wire wire-react" d="M150 192 V228" marker-end="url(#c-r)"/>
+  <text data-node="w-reset" x="156" y="214" font-size="11" class="t-react">value</text>
+  <path data-node="w-submit" data-flow class="wire wire-react" d="M215 80 H253" marker-end="url(#c-r)"/>
+  <path data-node="w-sdk1" data-flow class="wire wire-auth" d="M460 90 H503" marker-end="url(#c-a)"/>
+  <path data-node="w-net1" data-flow class="wire wire-auth" d="M710 80 H743" marker-end="url(#c-a)"/>
+  <path data-node="w-back1" data-flow class="wire wire-auth" d="M815 135 V155 H218" marker-end="url(#c-a)"/>
+  <text data-node="w-back1" x="490" y="150" font-size="11" class="t-auth">UserCredential</text>
+  <path data-node="w-doc" data-flow class="wire wire-fs" d="M215 175 C235 175 235 215 253 215" marker-end="url(#c-f)"/>
+  <path data-node="w-sdk2" data-flow class="wire wire-fs" d="M460 230 H503" marker-end="url(#c-f)"/>
+  <path data-node="w-net2" data-flow class="wire wire-fs" d="M710 220 H743" marker-end="url(#c-f)"/>
+  <path data-node="w-back2" data-flow class="wire wire-fs" d="M815 275 V305 H357 V267" marker-end="url(#c-f)"/>
+  <text data-node="w-back2" x="560" y="300" font-size="11" class="t-fs">snapshot / ok</text>
+  <path data-node="w-ret" data-flow class="wire wire-fs" d="M255 250 C232 250 236 186 217 186" marker-end="url(#c-f)"/>
+  <text data-node="w-ret" x="222" y="292" font-size="11" class="t-fs">userDocRef</text>
+</svg>
+</template>
+
+<pre class="code" id="code-comp" hidden>// sign-up-form.component.jsx
+const handleSubmit = async (event) => {
+  event.preventDefault();
+
+  if (password !== confirmPassword) {
+    alert('passwords do not match');
+    return;
+  }
+
+  try {
+    const { user } = await createAuthUserWithEmailAndPassword(
+      email,
+      password
+    );
+
+    await createUserDocumentFromAuth(user, { displayName });
+    resetFormFields();
+  } catch (error) {
+    if (error.code === 'auth/email-already-in-use') {
+      alert('Cannot create user, email already in use');
+    } else {
+      console.log('user creation encountered an error', error);
+    }
+  }
+};
+
+const handleChange = (event) => {
+  const { name, value } = event.target;
+  setFormFields({ ...formFields, [name]: value });
+};
+
+// sign-in-form.component.jsx
+const signInWithGoogle = async () => {
+  const { user } = await signInWithGooglePopup();
+  await createUserDocumentFromAuth(user);
+};</pre>
+
+<div id="comp-flow"></div>
+
+<div class="callout warn"><span class="title">Fermati e chiediti</span>
+Nel passo 9 della variante sign-up, <code>createUserDocumentFromAuth</code> intercetta da sola gli errori di Firestore e non li rilancia. Dal punto di vista di <code>SignUpForm</code>, la scrittura <b>riesce sempre</b>. Cosa vede l'utente se le Security Rules bloccano la scrittura? Ci torniamo nelle domande da dev.</div>
+
+<!-- ================================================================== -->
+<h2 id="documentazione"><span class="section-num">8</span>Dalla documentazione ufficiale al codice del corso</h2>
+<p>Se apri la documentazione di Firestore non trovi <code>createUserDocumentFromAuth</code>. Trovi esempi con città (<code>cities</code>, <code>"SF"</code>, <code>"LA"</code>), scritti "nudi", senza funzioni intorno. È normale: la documentazione mostra <b>il mattone</b>, il corso ti mostra <b>la casa</b> costruita con quei mattoni. Qui impari a passare dall'uno all'altra.</p>
+
+<h3>Lettura di un documento</h3>
+<div class="grid-2">
+<div>
+<p><span class="pill fs">DOC UFFICIALE</span> <a href="https://firebase.google.com/docs/firestore/query-data/get-data" target="_blank" rel="noopener">Get data → Get a document</a>, scheda <b>Web</b> (la prima: modulare)</p>
+<pre class="code">import { doc, getDoc } from "firebase/firestore";
+
+const docRef = doc(db, "cities", "SF");
+const docSnap = await getDoc(docRef);
+
+if (docSnap.exists()) {
+  console.log("Document data:", docSnap.data());
+} else {
+  // docSnap.data() will be undefined in this case
+  console.log("No such document!");
+}</pre>
+</div>
+<div>
+<p><span class="pill react">CORSO</span> <code>firebase.utils.js</code></p>
+<pre class="code">import { doc, getDoc, setDoc } from 'firebase/firestore';
+
+const userDocRef = doc(db, 'users', userAuth.uid);
+const userSnapshot = await getDoc(userDocRef);
+
+if (!userSnapshot.exists()) {
+  // ...crea il documento con setDoc
+}
+
+return userDocRef;</pre>
+</div>
+</div>
+
+<h3>Scrittura di un documento</h3>
+<div class="grid-2">
+<div>
+<p><span class="pill fs">DOC UFFICIALE</span> <a href="https://firebase.google.com/docs/firestore/manage-data/add-data" target="_blank" rel="noopener">Add data → Set a document</a></p>
+<pre class="code">import { doc, setDoc } from "firebase/firestore";
+
+await setDoc(doc(db, "cities", "LA"), {
+  name: "Los Angeles",
+  state: "CA",
+  country: "USA"
+});</pre>
+</div>
+<div>
+<p><span class="pill react">CORSO</span></p>
+<pre class="code">await setDoc(userDocRef, {
+  displayName,
+  email,
+  createdAt,
+  ...additionalInformation,
+});</pre>
+</div>
+</div>
+<p style="font-size:13px;color:var(--muted)">Snippet tratti dalla documentazione di Firebase (Google), codice con licenza Apache 2.0.</p>
+
+<h3>La tabella di traduzione</h3>
+<p>Questo è <b>il</b> metodo per leggere qualsiasi documentazione: per ogni elemento dello snippet ti chiedi <i>"cosa diventa nel mio dominio?"</i>.</p>
+<div class="table-wrap"><table>
+<tr><th>Nella doc</th><th>Nel corso</th><th>Perché</th></tr>
+<tr><td><code>db</code></td><td><code>db</code></td><td>Uguale: è l'istanza creata con <code>getFirestore()</code>, la doc dà per scontato che tu ce l'abbia già.</td></tr>
+<tr><td><code>"cities"</code></td><td><code>'users'</code></td><td>Il nome della collection è un <b>dato del tuo dominio</b>. Le città sono solo un esempio.</td></tr>
+<tr><td><code>"SF"</code>, <code>"LA"</code> (fissi)</td><td><code>userAuth.uid</code> (variabile)</td><td>Nella doc l'id è scritto a mano. Nella tua app <b>cambia per ogni utente</b>, quindi diventa un valore che arriva da fuori: un <b>parametro</b>.</td></tr>
+<tr><td><code>docRef</code>, <code>docSnap</code></td><td><code>userDocRef</code>, <code>userSnapshot</code></td><td>Stesso ruolo, nome più parlante. Il suffisso <code>Ref</code> o <code>Snap(shot)</code> resta perché ricorda <b>cosa</b> c'è dentro: indirizzo o foto.</td></tr>
+<tr><td><code>if (docSnap.exists())</code></td><td><code>if (!userSnapshot.exists())</code></td><td>La doc vuole <i>leggere</i> se esiste. Il corso vuole <i>creare</i> se non esiste: stessa domanda, decisione opposta.</td></tr>
+<tr><td><code>console.log(...)</code></td><td><code>setDoc(...)</code></td><td>La doc si ferma a mostrare il dato. Nel corso è lì che parte l'azione vera.</td></tr>
+<tr><td><code>await</code> "nudo" in cima al file</td><td>dentro una funzione <code>async</code></td><td>Lo snippet è un frammento. Nel progetto ogni <code>await</code> deve stare dentro una funzione async.</td></tr>
+<tr><td><code>getFirestore(app)</code></td><td><code>getFirestore()</code></td><td>Sono due <b>firme</b> (overload) della stessa funzione. Senza argomento, la reference dice che restituisce l'istanza "associated with the default FirebaseApp", cioè quella creata da <code>initializeApp</code>.</td></tr>
+</table></div>
+
+<h3>Come nasce un'astrazione: 4 domande</h3>
+<div class="grid-2">
+  <div class="card"><b>1. Cosa fa lo snippet?</b><br>Descrivilo in una frase con un verbo: <i>"legge il documento SF dalla collection cities"</i>.</div>
+  <div class="card"><b>2. Cosa è fisso e cosa cambia?</b><br>Quello che cambia ogni volta diventa un <b>parametro</b> (<code>userAuth</code>). Quello che è sempre uguale resta nella funzione (<code>'users'</code>).</div>
+  <div class="card"><b>3. Cosa deve sapere chi chiama?</b><br>Il componente deve dare solo l'utente, non <code>db</code> né il percorso. Così nasce la <b>firma</b>: <code>createUserDocumentFromAuth(userAuth, additionalInformation)</code>.</div>
+  <div class="card"><b>4. Cosa restituisco?</b><br>Cosa serve a chi chiama dopo? Un indirizzo riutilizzabile: <code>return userDocRef</code>.</div>
+</div>
+
+<div class="callout bad"><span class="title">La doc dice una cosa che il corso non dice</span>
+Nella <a href="https://firebase.google.com/docs/reference/js/firestore_.md#setdoc_f47a2ea" target="_blank" rel="noopener">API reference di setDoc</a> c'è scritto che <i>"it is usually undesirable to <code>await</code> the <code>Promise</code> returned from this function"</i>.
+<span style="display:block;margin-top:6px">Il motivo: Firestore salva subito il dato nella <b>cache locale</b> (la chiama <i>latency compensation</i>) e lo spedisce al server appena può. La Promise però si risolve solo quando il server conferma, e se sei offline può restare in attesa a lungo. Il corso fa <code>await setDoc(...)</code> lo stesso: è sbagliato? <b>Dipende da cosa ti serve</b>. Se devi sapere che il server ha davvero accettato prima di andare avanti, l'<code>await</code> serve. Se vuoi che l'interfaccia non resti bloccata, no. Ecco perché conviene leggere anche la reference e non solo i tutorial: lì trovi i compromessi.</span></div>
+
+<p>Per imparare a leggere la documentazione in generale (guide, API reference, MDN) c'è il modulo toolkit <a href="t1-documentazione.html"><b>T1 · Leggere la documentazione</b></a>.</p>
+
+<!-- ================================================================== -->
+<h2 id="errori"><span class="section-num">9</span>Errori tipici: dal modello sbagliato a quello giusto</h2>
+<p>Ogni errore qui sotto nasce da un'<b>idea sbagliata</b>. Correggere la riga non basta: va corretta l'idea, altrimenti l'errore torna in un'altra forma.</p>
+
+<div class="card">
+<h3 style="margin-top:0">❶ "getDoc mi dà il documento"</h3>
+<pre class="code">const userSnapshot = getDoc(userDocRef);   // manca await
+if (!userSnapshot.exists()) { … }          // TypeError: userSnapshot.exists is not a function</pre>
+<p><b>Passo per passo:</b> <code>getDoc</code> parte e restituisce <i>subito</i> una Promise, cioè una ricevuta. La riga successiva viene eseguita immediatamente, mentre il pacco è ancora in viaggio. Chiami <code>.exists()</code> sulla ricevuta, e la ricevuta non ha quel metodo.</p>
+<div class="grid-2">
+  <div class="callout bad"><span class="title">Modello sbagliato</span>"Il codice si ferma ad aspettare a ogni riga."</div>
+  <div class="callout good"><span class="title">Modello giusto</span>"Le operazioni di rete restituiscono una promessa. Il codice si ferma <b>solo dove scrivo await</b>."</div>
+</div>
+</div>
+
+<div class="card">
+<h3 style="margin-top:0">❷ "setDoc aggiorna il documento"</h3>
+<pre class="code">// documento esistente: { displayName: 'Leo', email: 'leo@mail.it', createdAt: … }
+await setDoc(userDocRef, { displayName: 'Leandro' });
+// adesso il documento è: { displayName: 'Leandro' }   ← email e createdAt SPARITI</pre>
+<p><b>Passo per passo:</b> <code>setDoc</code> significa "a questo indirizzo deve esserci <b>esattamente</b> questo". Prende la cartella, butta via tutti i fogli e ci mette solo quello che gli hai dato.</p>
+<div class="grid-2">
+  <div class="callout bad"><span class="title">Modello sbagliato</span>"set = imposta questo campo."</div>
+  <div class="callout good"><span class="title">Modello giusto</span>"set = sostituisci la cartella intera. Per toccare solo alcuni fogli: <code>updateDoc</code>, oppure <code>setDoc(…, {merge: true})</code>."</div>
+</div>
+</div>
+
+<div class="card">
+<h3 style="margin-top:0">❸ "Un campo è un pezzo del percorso"</h3>
+<pre class="code">doc(db, 'users', uid, 'displayName');
+// FirebaseError: Invalid document reference. Document references must have
+// an even number of segments, but users/g7Hk2/displayName has 3.</pre>
+<p><b>Passo per passo:</b> conta i segmenti: sono 3, un numero dispari, quindi Firestore pensa che tu voglia una <i>collection</i> chiamata <code>displayName</code>. Ma <code>doc()</code> vuole un documento. Il messaggio d'errore ti sta dicendo proprio questo: leggilo, è preciso.</p>
+<div class="grid-2">
+  <div class="callout bad"><span class="title">Modello sbagliato</span>"Il percorso arriva fino al dato che voglio."</div>
+  <div class="callout good"><span class="title">Modello giusto</span>"Il percorso arriva <b>fino al documento</b>. I campi si leggono <b>dopo</b>, dalla foto: <code>snap.data().displayName</code>."</div>
+</div>
+</div>
+
+<div class="card">
+<h3 style="margin-top:0">❹ "Se il documento non esiste, getDoc dà errore"</h3>
+<pre class="code">const snap = await getDoc(doc(db, 'users', 'nessuno'));
+snap.exists();  // false   ← nessun errore
+snap.data();    // undefined
+{ id: snap.id, ...snap.data() }  // { id: 'nessuno' }  ← sembra un utente vero!</pre>
+<div class="grid-2">
+  <div class="callout bad"><span class="title">Modello sbagliato</span>"Documento mancante = eccezione, la prendo nel catch."</div>
+  <div class="callout good"><span class="title">Modello giusto</span>"Documento mancante = foto di una cartella vuota. Va controllata con <code>exists()</code> <b>prima</b> di usare i dati."</div>
+</div>
+</div>
+
+<div class="card">
+<h3 style="margin-top:0">❺ "Salvo anche la password, così ce l'ho"</h3>
+<pre class="code">await setDoc(userDocRef, { displayName, email, password });  // ✘ MAI</pre>
+<p>La password la custodisce Firebase Auth, in forma di hash, e nessuno può rileggerla, nemmeno tu. In Firestore sarebbe <b>in chiaro</b>, leggibile da chiunque abbia accesso al documento. Non c'è nessun caso d'uso in cui serva salvarla lì.</p>
+</div>
+
+<!-- ================================================================== -->
+<h2 id="verifica"><span class="section-num">10</span>Verifica</h2>
+<p>Conta <b>solo il primo tentativo</b>: è l'unico che misura quello che sapevi davvero. Quando sbagli leggi la spiegazione, non limitarti a cliccare un'altra risposta.</p>
+<div class="callout" id="score"></div>
+<div id="q1"></div><div id="q2"></div><div id="q3"></div><div id="q4"></div>
+<div id="q5"></div><div id="q6"></div><div id="q7"></div><div id="q8"></div>
+<h3>Domande da dev</h3>
+<p>Più difficili. Non chiedono di ricordare, ma di <b>simulare</b>: segui il codice riga per riga con valori concreti, e solo dopo rispondi.</p>
+<div id="q9"></div><div id="q10"></div><div id="q11"></div><div id="q12"></div><div id="q13"></div>
+
+<!-- ================================================================== -->
+<h2 id="esercizi"><span class="section-num">11</span>Esercizi</h2>
+<p>Dal più semplice al più complesso. Ognuno si consegna scrivendo <code>correggi m3-eN</code> in Claude Code. Il voto è su 10, con la rubrica spiegata in <a href="../come-funziona.html">Come vieni valutato</a>. <b>Sotto il 6 l'esercizio va rifatto</b> e non dà XP.</p>
+<div id="ex-list"></div>
+
+<div class="footer-nav">
+  <a class="btn" href="../index.html">← Dashboard</a>
+  <a class="btn" href="../glossario.html">Glossario →</a>
+</div>
+</main>
+</div>
+
+<script src="../assets/manifest.js"></script>
+<script src="../assets/registro.js"></script>
+<script src="../assets/glossario.js"></script>
+<script src="../assets/app.js"></script>
+<script>
+/* ---------------- dati ricorrenti ---------------- */
+const USER = { __type: 'UserImpl', uid: 'g7Hk2', displayName: 'Leandro L.', email: 'leo@mail.it', emailVerified: true, photoURL: 'https://lh3.googleusercontent.com/…', providerData: [{ __type: 'Object', providerId: 'google.com', uid: '10342…' }], metadata: { __type: 'UserMetadata', creationTime: 'Wed, 18 Nov 2026 09:12:00 GMT', lastSignInTime: 'Wed, 18 Nov 2026 09:12:00 GMT' }, getIdToken: 'ƒ getIdToken()' };
+const REF = { __type: 'DocumentReference', id: 'g7Hk2', path: 'users/g7Hk2', type: 'document', firestore: { __type: 'Firestore (db)' } };
+const TS = { __type: 'Timestamp', seconds: 1794993120, nanoseconds: 0, toDate: 'ƒ toDate()' };
+const STORED = { displayName: 'Leandro L.', email: 'leo@mail.it', createdAt: TS };
+
+Lab.renderInspector(document.getElementById('insp-user'), USER);
+Lab.renderInspector(document.getElementById('insp-ref'), REF);
+Lab.renderInspector(document.getElementById('insp-snap'), { __type: 'DocumentSnapshot', id: 'g7Hk2', ref: { __type: 'DocumentReference', path: 'users/g7Hk2' }, 'exists()': true, 'data()': { __type: 'Object', ...STORED }, metadata: { __type: 'SnapshotMetadata', fromCache: false } });
+Lab.renderInspector(document.getElementById('insp-snap0'), { __type: 'DocumentSnapshot', id: 'nessuno', ref: { __type: 'DocumentReference', path: 'users/nessuno' }, 'exists()': false, 'data()': undefined });
+
+/* ---------------- stepper ---------------- */
+const common = [
+  { title: 'Il login con Google è completato', on: ['react'], lines: [], dataLabel: 'In SignInForm: const { user } = await signInWithGooglePopup()',
+    text: '<p>Firebase Auth ha verificato l\'identità e restituito <code>user</code>. A questo punto Firestore <b>non sa ancora niente</b> di questo utente: sono due sistemi separati.</p>',
+    data: { user: USER } },
+  { title: 'Chiamata della funzione', on: ['react', 'fn'], hot: ['w-call'], lines: [[1, 4]], dataLabel: 'Parametri ricevuti',
+    text: '<p><code>createUserDocumentFromAuth(user)</code>: il secondo argomento non viene passato, quindi il default <code>= {}</code> lo trasforma in un oggetto vuoto.</p>',
+    data: { userAuth: { __type: 'UserImpl', uid: 'g7Hk2', displayName: 'Leandro L.', email: 'leo@mail.it' }, additionalInformation: {} } },
+  { title: 'Guardia', on: ['fn', 'guard'], lines: [5], dataLabel: 'Valutazione della condizione',
+    text: '<p><code>userAuth</code> è un oggetto, quindi è "truthy", <code>!userAuth</code> vale <code>false</code> e non si esce. Si prosegue.</p><p>A cosa serve allora? A non crashare se un giorno la funzione viene chiamata con <code>null</code>, per esempio da un listener al momento del logout.</p>',
+    data: { userAuth: '{…}', '!userAuth': false, esito: 'prosegui' } },
+  { title: 'Costruisci l\'indirizzo', on: ['fn', 'ref'], lines: [7], dataLabel: 'userDocRef',
+    text: '<p><code>doc()</code> è <b>sincrona</b> e <b>non va in rete</b>: compone il percorso <code>users/g7Hk2</code> e lo impacchetta in un oggetto. Il documento può non esistere: un indirizzo si può scrivere anche per una casa non ancora costruita.</p>',
+    data: { userDocRef: REF } },
+];
+const newUser = [
+  ...common,
+  { title: 'Vai all\'indirizzo… (await)', on: ['fn', 'ref', 'snap', 'fs', 'col'], hot: ['w-read'], lines: [9], dataLabel: 'userSnapshot durante l\'attesa',
+    text: '<p><code>getDoc</code> parte e la funzione <b>si sospende</b> sull\'<code>await</code>. Nel frattempo React e il browser continuano a lavorare, la pagina non si blocca.</p><p>Se mancasse <code>await</code>, <code>userSnapshot</code> sarebbe questa Promise pendente.</p>',
+    data: { userSnapshot: '⏳ Promise<DocumentSnapshot> (pending)' } },
+  { title: '…torna con la foto', on: ['snap', 'fs', 'col'], hot: ['w-reply'], lines: [9], dataLabel: 'userSnapshot',
+    text: '<p>Il server risponde: nel cassetto <code>users</code> non c\'è nessuna cartella <code>g7Hk2</code>. Nessun errore: arriva una <b>foto di niente</b>.</p>',
+    data: { userSnapshot: { __type: 'DocumentSnapshot', id: 'g7Hk2', 'exists()': false, 'data()': undefined } } },
+  { title: 'Decisione: il documento esiste?', on: ['fn', 'check'], lines: [11], dataLabel: 'Valutazione',
+    text: '<p><code>exists()</code> è <code>false</code>, quindi <code>!false</code> è <code>true</code> e si <b>entra</b> nell\'if.</p>',
+    data: { 'userSnapshot.exists()': false, '!userSnapshot.exists()': true, esito: 'entra nell\'if' } },
+  { title: 'Prepara i dati da salvare', on: ['fn', 'check'], lines: [12, 13, [16, 21]], dataLabel: 'Oggetto passato a setDoc',
+    text: '<p>Il destructuring estrae <code>displayName</code> ed <code>email</code>, poi si aggiunge la data. Lo spread di <code>additionalInformation</code> (vuoto) non aggiunge niente.</p><p>Durante lo sign-up con email conterrebbe <code>{ displayName: \'Leo\' }</code>: essendo scritto per ultimo, vincerebbe sul <code>null</code> di Auth.</p>',
+    data: { displayName: 'Leandro L.', email: 'leo@mail.it', createdAt: { __type: 'Date', toString: 'Wed Nov 18 2026 10:12:00' } } },
+  { title: 'Scrittura: setDoc', on: ['check', 'fs', 'col', 'doc'], hot: ['w-write'], lines: [[15, 21]], dataLabel: 'Sul server: users/g7Hk2',
+    text: '<p>La funzione si sospende di nuovo sull\'<code>await</code>. Il server crea la cartella <code>g7Hk2</code>, e <code>Date</code> viene convertita in <b>Timestamp</b>.</p><p>Se la scrittura fallisce (regole, rete) l\'errore arriva al <code>catch</code>, proprio grazie all\'<code>await</code>.</p>',
+    data: { '~displayName': 'Leandro L.', '~email': 'leo@mail.it', '~createdAt': TS } },
+  { title: 'Restituisci l\'indirizzo', on: ['ret', 'react', 'doc', 'col', 'fs'], hot: ['w-ret'], lines: [27], dataLabel: 'Valore restituito · Bilancio',
+    text: '<p>Si restituisce il <b>riferimento</b>, non la foto, perché la foto è ormai vecchia: è stata scattata quando il documento non esisteva.</p><p><b>Bilancio: 1 lettura, 1 scrittura.</b></p>',
+    data: { return: REF, letture: 1, scritture: 1 } },
+];
+const existing = [
+  ...common,
+  { title: 'Vai all\'indirizzo… (await)', on: ['fn', 'ref', 'snap', 'fs', 'col', 'doc'], hot: ['w-read'], lines: [9], dataLabel: 'userSnapshot durante l\'attesa',
+    text: '<p>Stessa richiesta del primo login. Questa volta però la cartella <code>g7Hk2</code> c\'è già: è stata creata la volta scorsa.</p>',
+    data: { userSnapshot: '⏳ Promise<DocumentSnapshot> (pending)' } },
+  { title: '…torna con la foto', on: ['snap', 'fs', 'col', 'doc'], hot: ['w-reply'], lines: [9], dataLabel: 'userSnapshot',
+    text: '<p>La foto contiene i dati attuali del documento.</p>',
+    data: { userSnapshot: { __type: 'DocumentSnapshot', id: 'g7Hk2', 'exists()': true, 'data()': { __type: 'Object', ...STORED } } } },
+  { title: 'Decisione: il documento esiste?', on: ['fn', 'check'], lines: [11], dataLabel: 'Valutazione',
+    text: '<p><code>exists()</code> è <code>true</code>, quindi <code>!true</code> è <code>false</code> e l\'if viene <b>saltato completamente</b>. Nessuna scrittura: il profilo esistente resta intatto.</p>',
+    data: { 'userSnapshot.exists()': true, '!userSnapshot.exists()': false, esito: 'salta l\'if (righe 12-24)' } },
+  { title: 'Restituisci l\'indirizzo', on: ['ret', 'react', 'fs', 'col', 'doc'], hot: ['w-ret'], lines: [27], dataLabel: 'Valore restituito · Bilancio',
+    text: '<p>Stesso valore restituito del caso precedente.</p><p><b>Bilancio: 1 lettura, 0 scritture.</b> Ecco l\'idempotenza.</p>',
+    data: { return: REF, letture: 1, scritture: 0 } },
+];
+Lab.stepper('#flow', { title: 'createUserDocumentFromAuth', svg: '#svg-flow', code: '#code-cudfa',
+  variants: { nuovo: { label: 'Primo login', steps: newUser }, esistente: { label: 'Login successivo', steps: existing } } });
+
+/* ---------------- quiz ---------------- */
+Lab.quiz('#q1', { id: 'm3-q1', question: 'Il documento <code>users/xyz</code> <b>non esiste</b>. Cosa succede eseguendo <code>const ref = doc(db, \'users\', \'xyz\')</code>?',
+  options: [
+    { t: 'Lancia un errore perché il documento non esiste', why: '<span class="step"><code>doc()</code> non contatta il server: come farebbe a sapere che il documento non esiste? Scrive solo un indirizzo, e un indirizzo si può scrivere anche per una casa non ancora costruita.</span>' },
+    { t: 'Restituisce <code>null</code>', why: '<span class="step">Per restituire null dovrebbe sapere che il documento manca, quindi dovrebbe andare in rete. <code>doc()</code> non lo fa mai.</span>' },
+    { t: 'Restituisce un DocumentReference valido', ok: true, why: '<span class="step"><code>doc()</code> è sincrona e "stupida": compone il percorso e basta. Scoprire se il documento esiste è compito di <code>getDoc()</code>.</span>' },
+    { t: 'Restituisce una Promise da attendere', why: '<span class="step">Solo le operazioni che vanno in rete restituiscono Promise. <code>doc()</code> non va in rete, quindi restituisce subito un oggetto.</span>' },
+  ] });
+Lab.quiz('#q2', { id: 'm3-q2', question: 'Il percorso <code>users/g7Hk2/orders</code> indica…',
+  options: [
+    { t: 'Un documento', why: '<span class="step">Conta i segmenti: users (1), g7Hk2 (2), orders (3). Sono 3, dispari. I documenti hanno sempre un numero pari di segmenti.</span>' },
+    { t: 'Una collection (sotto-collection di g7Hk2)', ok: true, why: '<span class="step">3 segmenti, dispari: è una collection. È il "cassettino" attaccato alla cartella g7Hk2.</span>' },
+    { t: 'Un campo del documento g7Hk2', why: '<span class="step">È il modello sbagliato n° 3: i campi non fanno mai parte del percorso. Si leggono dalla foto con <code>data()</code>.</span>' },
+  ] });
+Lab.quiz('#q3', { id: 'm3-q3', question: 'Documento esistente: <code>{ displayName: "Leo", email: "leo@mail.it" }</code>. Esegui <code>await setDoc(ref, { displayName: "Leandro" })</code>. Cosa contiene ora il documento?',
+  options: [
+    { t: '<code>{ displayName: "Leandro", email: "leo@mail.it" }</code>', why: '<span class="step">Questo sarebbe il risultato di <code>updateDoc</code> o di <code>setDoc</code> con <code>{merge: true}</code>. Un <code>setDoc</code> semplice sostituisce tutta la cartella.</span>' },
+    { t: '<code>{ displayName: "Leandro" }</code>', ok: true, why: '<span class="step">setDoc vuol dire "a questo indirizzo deve esserci ESATTAMENTE questo". L\'email è sparita.</span>' },
+    { t: 'Errore: il documento esiste già', why: '<span class="step">setDoc non distingue tra creare e sovrascrivere: fa entrambe le cose. È <code>updateDoc</code> che fallisce, ma nel caso opposto, quando il documento NON esiste.</span>' },
+  ] });
+Lab.quiz('#q4', { id: 'm3-q4', type: 'order', question: 'Metti in ordine di esecuzione le operazioni di <code>createUserDocumentFromAuth</code> per un <b>utente nuovo</b>:',
+  items: ['if (!userAuth) return', 'doc(db, "users", uid)', 'await getDoc(userDocRef)', 'userSnapshot.exists()', 'await setDoc(userDocRef, {…})', 'return userDocRef'],
+  why: 'Ogni passo usa il risultato del precedente: senza indirizzo non puoi scattare la foto, senza foto non puoi decidere, senza decisione non sai se scrivere.',
+  explain: ['Nota la catena delle dipendenze: <code>getDoc</code> ha bisogno di <code>userDocRef</code>, <code>exists()</code> ha bisogno di <code>userSnapshot</code>. Quando non ricordi un ordine, ricostruiscilo chiedendoti "chi ha bisogno di cosa".'] });
+Lab.quiz('#q5', { id: 'm3-q5', question: 'Perché come ID del documento si usa l\'<code>uid</code> di Auth invece di un ID casuale generato da Firestore?',
+  options: [
+    { t: 'Perché Firestore non sa generare ID casuali', why: '<span class="step">Li sa generare: <code>addDoc()</code> o <code>doc(collection(db, \'users\'))</code> creano un ID casuale. Il motivo è un altro.</span>' },
+    { t: 'Perché così, dato un utente loggato, trovo il suo documento direttamente con <code>doc(db, \'users\', user.uid)</code>, senza cercarlo', ok: true, why: '<span class="step">Con un ID casuale dovresti fare una query "cerca il documento dove uid == …": più lenta, più costosa e più complicata. L\'uid come ID rende il collegamento diretto, e permette Security Rules semplici come <code>request.auth.uid == userId</code>.</span>' },
+    { t: 'Per motivi di sicurezza: gli ID casuali sono indovinabili', why: '<span class="step">Gli ID casuali di Firestore non sono affatto indovinabili. E comunque la sicurezza non viene dall\'ID ma dalle Security Rules.</span>' },
+  ] });
+Lab.quiz('#q6', { id: 'm3-q6', question: 'Cosa succede eseguendo questo codice?', code: "const snap = getDoc(doc(db, 'users', uid));\nif (snap.exists()) console.log('trovato');",
+  options: [
+    { t: 'Stampa "trovato" se il documento esiste', why: '<span class="step">Manca <code>await</code>: <code>snap</code> è la ricevuta (Promise), non la foto. La riga 2 viene eseguita subito, prima ancora che la risposta arrivi.</span>' },
+    { t: '<code>TypeError: snap.exists is not a function</code>', ok: true, why: '<span class="step">Una Promise non ha il metodo <code>exists</code>, quindi <code>snap.exists</code> è <code>undefined</code>, e chiamare <code>undefined()</code> provoca un TypeError. Quando leggi "X is not a function", chiediti sempre: <i>che cosa c\'è DAVVERO dentro X?</i></span>' },
+    { t: 'Non stampa niente perché la Promise vale false', why: '<span class="step">Una Promise non vale né true né false: è un oggetto. Qui però il codice non arriva nemmeno a valutare l\'if, perché va in crash prima.</span>' },
+  ] });
+Lab.quiz('#q7', { id: 'm3-q7', question: 'L\'<code>apiKey</code> è visibile nel codice del frontend. Cosa impedisce a un estraneo di leggere i documenti di tutti gli utenti?',
+  options: [
+    { t: 'Niente: va spostata in un file .env', why: '<span class="step">Un file .env in un\'app React finisce comunque <b>dentro il bundle</b> inviato al browser, quindi resterebbe visibile. E l\'apiKey di Firebase non è un segreto: identifica il progetto.</span>' },
+    { t: 'Le Security Rules valutate sul server', ok: true, why: '<span class="step">Ogni richiesta arriva al server con l\'identità dell\'utente (<code>request.auth</code>), e le regole decidono se lasciarla passare. Il frontend lo può modificare chiunque, il server no.</span>' },
+    { t: 'Il fatto che il codice usi <code>if (!userAuth) return</code>', why: '<span class="step">Quel controllo gira nel browser dell\'utente, che può modificarlo o saltarlo. I controlli lato client migliorano l\'esperienza d\'uso, non danno sicurezza.</span>' },
+  ] });
+Lab.quiz('#q8', { id: 'm3-q8', question: 'Documento <code>users/g7Hk2</code> con i campi <code>displayName</code> ed <code>email</code>. Cosa restituisce <code>snap.data()</code>?',
+  options: [
+    { t: '<code>{ id: "g7Hk2", displayName: …, email: … }</code>', why: '<span class="step">L\'id è l\'<b>etichetta</b> della cartella, non uno dei fogli. Sta in <code>snap.id</code>. Se lo vuoi insieme ai dati, devi unirlo tu: <code>{ id: snap.id, ...snap.data() }</code>.</span>' },
+    { t: '<code>{ displayName: …, email: … }</code>', ok: true, why: '<span class="step">Solo i campi. L\'id vive sullo snapshot e sul riferimento.</span>' },
+    { t: 'Un DocumentReference', why: '<span class="step">Il riferimento è <code>snap.ref</code>. <code>data()</code> estrae i dati dalla foto.</span>' },
+  ] });
+
+/* ---------------- stepper: viaggio nei componenti ---------------- */
+const CRED_EMAIL = { __type: 'UserCredential', user: { __type: 'UserImpl', uid: 'e9Pq1', email: 'leo2@mail.it', displayName: null, providerData: [{ __type: 'Object', providerId: 'password' }] }, providerId: null, operationType: 'signIn' };
+const CRED_GOOGLE = { __type: 'UserCredential', user: { __type: 'UserImpl', uid: 'g7Hk2', email: 'leo@mail.it', displayName: 'Leandro L.', providerData: [{ __type: 'Object', providerId: 'google.com' }] }, providerId: 'google.com', operationType: 'signIn' };
+const FILLED = { displayName: 'Leo', email: 'leo2@mail.it', password: 'segreta1', confirmPassword: 'segreta1' };
+const compSignUp = [
+  { title: 'L\'utente scrive nel form', on: ['input', 'form'], hot: ['w-type'], lines: [[27, 30]], dataLabel: 'SignUpForm · state formFields (dopo l\'ultima lettera)',
+    text: '<p>A ogni tasto premuto, <code>FormInput</code> chiama <code>onChange</code>, cioè <code>handleChange</code> del genitore. <code>event.target</code> è l\'input DOM: da lì si leggono <code>name</code> e <code>value</code>.</p><p><code>[name]: value</code> è una <b>computed property</b>: la chiave dell\'oggetto viene scelta a runtime. Lo spread copia tutti gli altri campi. Nuovo state → re-render → l\'input riceve il nuovo <code>value</code>. È il ciclo del <b>componente controllato</b> (lo approfondirai in M4).</p>',
+    data: { '~formFields': FILLED } },
+  { title: 'Submit: i controlli locali', on: ['form'], lines: [[2, 8]], dataLabel: 'Valutazioni',
+    text: '<p><code>preventDefault()</code> impedisce al browser di ricaricare la pagina, che è il comportamento predefinito di un <code>&lt;form&gt;</code>.</p><p>Il controllo delle password è <b>locale</b>: non serve chiedere niente al server per sapere se due stringhe sono uguali. Regola da dev: <b>fai i controlli economici prima di quelli costosi</b>.</p>',
+    data: { 'password === confirmPassword': true, esito: 'prosegui' } },
+  { title: 'Il componente chiama l\'astrazione', on: ['form', 'u-auth'], hot: ['w-submit'], lines: [[11, 14]], dataLabel: 'Argomenti passati a firebase.utils.js',
+    text: '<p>Il componente passa solo <b>email e password</b>. Non sa che esiste <code>auth</code>, non sa quale funzione dell\'SDK verrà usata. Chiede semplicemente "crea questo utente".</p>',
+    data: { email: 'leo2@mail.it', password: 'segreta1' } },
+  { title: 'L\'astrazione chiama l\'SDK', on: ['u-auth', 'sdk-auth'], hot: ['w-sdk1'], lines: [11], dataLabel: 'Chiamata reale (dentro firebase.utils.js)',
+    text: '<p>Qui la funzione del corso aggiunge l\'ingrediente che il componente non conosce: <code>auth</code>.</p><p><code>createUserWithEmailAndPassword(auth, email, password)</code>: questa è la funzione che trovi nella <b>documentazione ufficiale</b>.</p>',
+    data: { 'ƒ chiamata': 'ƒ createUserWithEmailAndPassword(auth, email, password)', auth: { __type: 'Auth', name: '[DEFAULT]' } } },
+  { title: 'Rete verso Auth… e attesa', on: ['sdk-auth', 'auth'], hot: ['w-net1'], lines: [11], dataLabel: 'Valore di quell\'espressione mentre aspetti',
+    text: '<p>Ci sono <b>due</b> funzioni sospese, una dentro l\'altra: <code>handleSubmit</code> aspetta <code>createAuthUserWith…</code>, che a sua volta aspetta l\'SDK. Il browser intanto resta libero: puoi scorrere la pagina, e React può fare re-render.</p>',
+    data: { risultato: '⏳ Promise<UserCredential> (pending)' } },
+  { title: 'Torna un UserCredential', on: ['auth', 'form'], hot: ['w-back1'], lines: [11], dataLabel: 'Risposta di Auth → destructuring',
+    text: '<p>Auth ha creato l\'account <b>e fatto il login</b>. La risposta è un <code>UserCredential</code>, e con <code>const { user } = …</code> ne estrai solo la proprietà <code>user</code>.</p><p>Nota <code>displayName: null</code>: con email e password, Auth non conosce il nome. Il nome scritto nel form esiste <b>solo nello state del componente</b>.</p>',
+    data: { UserCredential: CRED_EMAIL, '~user (estratto)': '→ UserCredential.user' } },
+  { title: 'Seconda chiamata: il documento', on: ['form', 'u-doc'], hot: ['w-doc'], lines: [16], dataLabel: 'Argomenti di createUserDocumentFromAuth',
+    text: '<p>Il componente unisce due fonti: <code>user</code>, arrivato dal <b>server</b>, e <code>displayName</code>, arrivato dallo <b>state</b>. È questo il motivo per cui esiste il parametro <code>additionalInformation</code>.</p>',
+    data: { userAuth: CRED_EMAIL.user, additionalInformation: { displayName: 'Leo' } } },
+  { title: 'Firestore: indirizzo, foto, scrittura', on: ['u-doc', 'sdk-fs', 'fs'], hot: ['w-sdk2', 'w-net2'], lines: [16], dataLabel: 'Sul server: users/e9Pq1',
+    text: '<p>È il flusso che hai visto animato nella sezione ④: <code>doc()</code>, poi <code>await getDoc()</code>, la foto è vuota, quindi <code>setDoc()</code>. Lo spread mette <code>\'Leo\'</code> al posto di <code>null</code>.</p>',
+    data: { '~displayName': 'Leo', '~email': 'leo2@mail.it', '~createdAt': TS } },
+  { title: 'Ritorno al componente', on: ['fs', 'u-doc', 'form'], hot: ['w-back2', 'w-ret'], lines: [16], dataLabel: 'Valore restituito',
+    text: '<p><code>createUserDocumentFromAuth</code> restituisce <code>userDocRef</code>, ma il componente <b>non lo usa</b>: l\'<code>await</code> sulla riga 16 serve solo ad <i>aspettare</i> che finisca.</p><p>Restituire qualcosa che nessuno usa non è un errore: la funzione è pensata per più chiamanti.</p>',
+    data: { return: { __type: 'DocumentReference', path: 'users/e9Pq1' }, 'usato da SignUpForm?': false } },
+  { title: 'Reset del form', on: ['form', 'input'], hot: ['w-reset'], lines: [17], dataLabel: 'SignUpForm · state formFields',
+    text: '<p><code>resetFormFields()</code> rimette lo state iniziale → re-render → ogni <code>FormInput</code> riceve <code>value=""</code> → i campi si svuotano.</p><p>Se Auth avesse lanciato un errore (per esempio email già usata), saremmo saltati al <code>catch</code> della riga 18 <b>senza</b> fare reset.</p>',
+    data: { '~formFields': { displayName: '', email: '', password: '', confirmPassword: '' } } },
+];
+const compGoogle = [
+  { title: 'Click su "Google sign in"', on: ['input', 'form'], lines: [33], dataLabel: 'Nessun dato dal form',
+    text: '<p>Il <code>Button</code> ha <code>type="button"</code> (non submit!) e <code>onClick={signInWithGoogle}</code>. Se fosse un submit, partirebbe anche <code>handleSubmit</code> del form.</p><p>Nessuno state coinvolto: Google si occuperà di tutto.</p>',
+    data: { 'event.type': 'click', 'button.type': 'button' } },
+  { title: 'Il componente chiama l\'astrazione', on: ['form', 'u-auth'], hot: ['w-submit'], lines: [34], dataLabel: 'Argomenti',
+    text: '<p><code>signInWithGooglePopup()</code> non riceve niente: <code>auth</code> e <code>googleProvider</code> li conosce già <code>firebase.utils.js</code>.</p>',
+    data: { argomenti: [] } },
+  { title: 'SDK → popup Google', on: ['u-auth', 'sdk-auth', 'auth'], hot: ['w-sdk1', 'w-net1'], lines: [34], dataLabel: 'Valore mentre aspetti',
+    text: '<p><code>signInWithPopup(auth, googleProvider)</code> apre una finestra di Google. <code>prompt: \'select_account\'</code> obbliga a scegliere l\'account ogni volta.</p><p>L\'attesa qui può durare <b>secondi o minuti</b>: dipende da quanto ci mette l\'utente a cliccare.</p>',
+    data: { risultato: '⏳ Promise<UserCredential> (pending — l\'utente sta scegliendo)' } },
+  { title: 'Torna il UserCredential', on: ['auth', 'form'], hot: ['w-back1'], lines: [34], dataLabel: 'Risposta',
+    text: '<p>Con Google, <code>displayName</code> è già pieno: Google lo conosce. Per questo la chiamata successiva non passa <code>additionalInformation</code>.</p>',
+    data: { UserCredential: CRED_GOOGLE } },
+  { title: 'Documento Firestore', on: ['form', 'u-doc', 'sdk-fs', 'fs'], hot: ['w-doc', 'w-sdk2', 'w-net2'], lines: [35], dataLabel: 'Argomenti',
+    text: '<p>Il default <code>= {}</code> entra in gioco. Primo login: il documento viene creato. Login successivi: solo la lettura.</p>',
+    data: { userAuth: CRED_GOOGLE.user, additionalInformation: {} } },
+  { title: 'Fine: ma manca qualcosa', on: ['fs', 'u-doc', 'form'], hot: ['w-back2', 'w-ret'], lines: [[33, 36]], dataLabel: 'Osservazione',
+    text: '<p>La funzione finisce. Confrontala con <code>handleSubmit</code>: <b>non ha try/catch</b>.</p><p>Cosa succede se l\'utente chiude il popup? Prova a rispondere prima di guardare le domande da dev.</p>',
+    data: { 'try/catch': false, 'reset form': 'non serve' } },
+];
+Lab.stepper('#comp-flow', { title: 'Dal form a Firebase e ritorno', svg: '#svg-comp', code: '#code-comp',
+  variants: { email: { label: 'Sign-up email', steps: compSignUp }, google: { label: 'Google', steps: compGoogle } } });
+
+/* ---------------- domande da dev ---------------- */
+Lab.quiz('#q9', { id: 'm3-q9', question: 'In che ordine vengono stampate le lettere?', code: "const f = async () => {\n  console.log('A');\n  await getDoc(userDocRef);\n  console.log('B');\n};\n\nf();\nconsole.log('C');",
+  options: [
+    { t: 'A B C', why: '<span class="step">Questo sarebbe vero se <code>await</code> bloccasse <b>tutto</b> il programma. In realtà blocca solo la funzione <code>f</code>.</span><span class="step">Passo per passo: <code>f()</code> parte e stampa A. Arriva all\'<code>await</code>, si sospende e <b>restituisce subito il controllo</b> a chi l\'ha chiamata. La riga successiva a <code>f();</code> stampa C. Quando la rete risponde, <code>f</code> riprende e stampa B.</span>' },
+    { t: 'A C B', ok: true, why: '<span class="step"><code>await</code> sospende <b>solo la funzione async in cui si trova</b>. Il codice fuori continua. Così funziona il browser: mentre aspetti Firestore, React continua a disegnare.</span>' },
+    { t: 'C A B', why: '<span class="step">Chiamare <code>f()</code> esegue subito il suo corpo, in modo sincrono, fino al primo <code>await</code>. Quindi A viene stampata prima di C.</span>' },
+  ] });
+Lab.quiz('#q10', { id: 'm3-q10', question: 'Sign-up con email. Auth crea l\'account, ma le Security Rules <b>rifiutano</b> la scrittura in Firestore (<code>permission-denied</code>). Cosa succede, guardando il codice reale?',
+  options: [
+    { t: 'Il catch di <code>handleSubmit</code> intercetta l\'errore e il form non viene resettato', why: '<span class="step">Segui l\'errore: nasce in <code>setDoc</code>, dentro <code>createUserDocumentFromAuth</code>. Lì c\'è un <code>try/catch</code> che lo <b>intercetta</b> e fa solo <code>console.log</code>. Un errore intercettato e non rilanciato <b>smette di esistere</b> per chi sta sopra.</span>' },
+    { t: 'L\'errore viene stampato in console, il form si resetta come se tutto fosse andato bene, l\'utente esiste in Auth ma non ha documento in Firestore', ok: true, why: '<span class="step">Il catch interno "ingoia" l\'errore, quindi <code>handleSubmit</code> va avanti e fa il reset. Risultato: un utente <b>a metà</b>. Il login funzionerà, ma il suo profilo non esiste.</span><span class="step">Lezione da dev: <b>intercetta un errore solo dove sai cosa farne</b>. Altrimenti rilancialo (<code>throw error</code>) e lascia che sia il chiamante a decidere.</span>' },
+    { t: 'Auth annulla automaticamente la creazione dell\'account', why: '<span class="step">Auth e Firestore sono <b>due sistemi separati</b> (sezione ①). Auth non sa neanche che hai provato a scrivere in Firestore. Non esiste un "annulla" automatico tra i due.</span>' },
+  ] });
+Lab.quiz('#q11', { id: 'm3-q11', question: 'L\'utente clicca "Google sign in" e poi <b>chiude il popup</b> senza scegliere un account. Cosa succede?',
+  options: [
+    { t: 'Niente di visibile: la Promise resta in attesa per sempre', why: '<span class="step">L\'SDK si accorge che il popup è stato chiuso e <b>rifiuta</b> la Promise con un errore (codice <code>auth/popup-closed-by-user</code>). Una Promise rifiutata non è una Promise in attesa.</span>' },
+    { t: '<code>await</code> lancia l\'errore dentro <code>signInWithGoogle</code>; non essendoci try/catch, la funzione si interrompe, <code>createUserDocumentFromAuth</code> non viene mai chiamata e in console compare un "Uncaught (in promise)"', ok: true, why: '<span class="step">Un <code>await</code> su una Promise rifiutata si comporta come un <code>throw</code> su quella riga. Senza catch l\'errore risale fino a chi ha chiamato <code>signInWithGoogle</code>, cioè l\'onClick di React, che non lo gestisce.</span><span class="step">Non è un crash dell\'app, ma è un errore non gestito. Un dev lo intercetterebbe e, per questo codice specifico, lo ignorerebbe in silenzio: chiudere il popup è una scelta legittima dell\'utente.</span>' },
+    { t: '<code>user</code> vale <code>undefined</code> e <code>createUserDocumentFromAuth</code> esce dalla guardia <code>if (!userAuth)</code>', why: '<span class="step">Per arrivare alla riga successiva, <code>await</code> dovrebbe restituire un valore. Ma una Promise rifiutata non restituisce niente: <b>lancia</b>. La destructuring <code>{ user }</code> non viene mai eseguita.</span>' },
+  ] });
+Lab.quiz('#q12', { id: 'm3-q12', question: 'Qualcuno chiama <code>createUserDocumentFromAuth(user, null)</code>. Cosa succede alla riga <code>...additionalInformation</code>?',
+  options: [
+    { t: 'Il default <code>= {}</code> sostituisce <code>null</code>, quindi nessun problema', why: '<span class="step">Il valore di default scatta <b>solo</b> quando l\'argomento è <code>undefined</code>, cioè mancante. <code>null</code> è un valore passato esplicitamente, quindi <code>additionalInformation</code> vale proprio <code>null</code>. La risposta finale "nessun problema" è giusta, ma il motivo è sbagliato.</span>' },
+    { t: 'TypeError: lo spread di <code>null</code> non è possibile', why: '<span class="step">Questo vale per lo spread <b>in un array</b> (<code>[...null]</code> → TypeError). Lo spread <b>in un oggetto</b> letterale (<code>{...null}</code>) ignora <code>null</code> e <code>undefined</code>. Sono due regole diverse: MDN le descrive nella pagina "Spread syntax".</span>' },
+    { t: '<code>additionalInformation</code> vale <code>null</code>, ma <code>{...null}</code> in un oggetto non aggiunge niente e non dà errore', ok: true, why: '<span class="step">Due regole precise: (1) il default scatta solo con <code>undefined</code>; (2) lo spread in un oggetto ignora <code>null</code> e <code>undefined</code>. Il risultato è corretto <b>per una coincidenza</b>, e un dev lo sa distinguere.</span>' },
+  ] });
+Lab.quiz('#q13', { id: 'm3-q13', question: 'Lo stesso utente nuovo fa il primo login con Google <b>quasi contemporaneamente</b> da due schede. Cosa può succedere?',
+  options: [
+    { t: 'Impossibile: Firestore blocca la seconda richiesta', why: '<span class="step"><code>getDoc</code> e <code>setDoc</code> sono due operazioni <b>separate</b>. Firestore non sa che hai intenzione di scrivere solo dopo aver letto.</span>' },
+    { t: 'Entrambe le schede leggono "non esiste", entrambe scrivono: vince l\'ultima scrittura (per esempio il suo <code>createdAt</code>)', ok: true, why: '<span class="step">È una <b>race condition</b> di tipo "controlla, poi agisci": tra il controllo (<code>exists()</code>) e l\'azione (<code>setDoc</code>) passa del tempo, e qualcun altro può agire in mezzo.</span><span class="step">Qui il danno è minimo (due createdAt quasi identici). Con un saldo o un magazzino sarebbe grave. La soluzione di Firestore si chiama <b>transazione</b> (<code>runTransaction</code>): lettura e scrittura diventano un\'unica operazione indivisibile.</span>' },
+    { t: 'Si creano due documenti diversi per lo stesso utente', why: '<span class="step">L\'ID del documento è l\'<code>uid</code>, uguale in entrambe le schede. Lo stesso indirizzo vuol dire la stessa cartella: la seconda scrittura <b>sovrascrive</b>, non duplica.</span>' },
+  ] });
+
+Lab.quizScore('#score');
+Lab.exercises('#ex-list', 'm3');
+</script>
+</body>
+</html>

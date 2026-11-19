@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Come vieni valutato</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body data-root=".">
+<div class="lab">
+<nav class="lab-nav" id="lab-nav"></nav>
+<main class="lab-main">
+  <div class="kicker">Il patto</div>
+  <h1>Come vieni valutato</h1>
+  <p class="lead">Un voto gonfiato è una bugia che paghi dopo, quando il codice vero non funziona e non sai perché. Qui il voto dice esattamente dove sei.</p>
+
+  <h2>Il ciclo di ogni esercizio</h2>
+  <ol>
+    <li><b>Studia</b> la lezione e fai i quiz. Se fai meno dell'80% al primo tentativo, rileggi prima di andare avanti.</li>
+    <li><b>Risolvi</b> l'esercizio nel suo file, in <code>learning/esercizi/</code>. Scrivi in cima quanti aiuti hai aperto.</li>
+    <li><b>Autoverifica</b> (se l'esercizio ha i test): <code>node learning/esercizi/verifica.mjs m3-e2</code>.</li>
+    <li><b>Consegna</b>: in Claude Code scrivi <code>correggi m3-e2</code>.</li>
+    <li><b>Correzione</b>: ricevi voto, rubrica e una spiegazione passo passo di ogni errore, salvata in <code>learning/esercizi/m3/feedback/</code>.</li>
+    <li><b>Sotto il 6 si rifà.</b> Tutti i tentativi restano nel registro: si vede il miglioramento.</li>
+  </ol>
+
+  <h2>La rubrica (10 punti)</h2>
+  <div class="table-wrap"><table>
+    <tr><th>Criterio</th><th>Punti</th><th>Cosa misura</th></tr>
+    <tr><td><b>Correttezza</b></td><td>4</td><td>Il codice fa ciò che è richiesto, casi limite compresi. I test passati sono il minimo, non la garanzia: posso trovare casi che i test non coprono.</td></tr>
+    <tr><td><b>Logica e comprensione</b></td><td>3</td><td>Le risposte scritte, le giustificazioni, il "perché". Codice giusto con spiegazioni sbagliate significa che la soluzione è stata indovinata, non capita.</td></tr>
+    <tr><td><b>Qualità</b></td><td>2</td><td>Nomi chiari, niente duplicazioni inutili, struttura leggibile, idiomi corretti (async/await, immutabilità).</td></tr>
+    <tr><td><b>Autonomia</b></td><td>1</td><td>1 = nessun aiuto · 0.5 = aiuti 1–2 · 0 = aiuto 3 o soluzione cercata altrove.</td></tr>
+  </table></div>
+
+  <h2>Cosa significa ogni voto</h2>
+  <div class="table-wrap"><table>
+    <tr><th>Voto</th><th>Significato</th><th>Esito</th></tr>
+    <tr><td>9 – 10</td><td>Padronanza. Potresti spiegarlo a un collega.</td><td>Superato</td></tr>
+    <tr><td>7 – 8.5</td><td>Solido, con qualche imprecisione da sistemare.</td><td>Superato</td></tr>
+    <tr><td>6 – 6.5</td><td>Funziona, ma il ragionamento ha delle lacune. Rileggi la correzione.</td><td>Superato al limite</td></tr>
+    <tr><td>4 – 5.5</td><td>Errori di logica sostanziali.</td><td><b>Da rifare</b></td></tr>
+    <tr><td>0 – 3.5</td><td>Il concetto non è ancora passato.</td><td><b>Ristudia, poi rifai</b></td></tr>
+  </table></div>
+
+  <h2>Come funziona la correzione</h2>
+  <div class="grid-2">
+    <div class="callout"><span class="title">Cosa fa il professore</span>
+      <ul>
+        <li>Dice chiaramente cosa è sbagliato, senza giri di parole.</li>
+        <li>Per ogni errore ricostruisce, passo per passo, cosa fa davvero il tuo codice.</li>
+        <li>Individua l'<b>idea sbagliata</b> che ha prodotto l'errore e la sostituisce con quella giusta.</li>
+        <li>Riconosce quello che è fatto bene, solo se è fatto bene davvero.</li>
+        <li>Ti dà un passo concreto da fare dopo.</li>
+      </ul></div>
+    <div class="callout warn"><span class="title">Cosa non fa</span>
+      <ul>
+        <li>Non dice "bravo" per l'impegno se il risultato non c'è.</li>
+        <li>Non alza il voto perché "ci sei quasi".</li>
+        <li>Non ti dà la soluzione completa al primo errore: ti porta a trovarla.</li>
+        <li>Non assegna badge di consolazione.</li>
+      </ul></div>
+  </div>
+
+  <h2>XP e livelli</h2>
+  <p>XP di un esercizio = <code>stelle × 100 × voto / 10</code>, contando solo il <b>miglior voto ≥ 6</b>. Un ★★★★★ preso con 9 vale 450 XP, un ★ preso con 10 ne vale 100. Gli esercizi difficili pesano di più perché insegnano di più.</p>
+  <p>Un modulo è <b>Superato</b> con tutti gli esercizi ≥ 6 e media ≥ 7. È <b>Padroneggiato</b> con media ≥ 8.5 e boss ≥ 8.</p>
+</main>
+</div>
+<script src="assets/manifest.js"></script>
+<script src="assets/registro.js"></script>
+<script src="assets/glossario.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>

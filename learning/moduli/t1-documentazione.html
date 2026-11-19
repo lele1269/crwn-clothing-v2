@@ -1,0 +1,437 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>T1 · Leggere la documentazione</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-root=".." data-module="t1">
+<div class="lab">
+<nav class="lab-nav" id="lab-nav"></nav>
+<main class="lab-main">
+
+<div class="kicker">Toolkit 1 · Competenza trasversale</div>
+<h1>Leggere la documentazione (senza paura)</h1>
+<p class="lead">Un corso finisce, la documentazione resta. Questo modulo ti insegna a orientarti in Firebase, MDN e in qualsiasi altra libreria: che tipo di pagina hai davanti, come si legge una firma, e come trasformi uno snippet generico nel codice del tuo progetto.</p>
+<ul class="toc">
+  <li><a href="#problema">① Perché sembra difficile</a></li>
+  <li><a href="#mappa">② I 4 tipi di pagina</a></li>
+  <li><a href="#guida">③ Una guida Firebase</a></li>
+  <li><a href="#firma">④ Leggere una firma</a></li>
+  <li><a href="#mdn">⑤ Leggere MDN</a></li>
+  <li><a href="#metodo">⑥ Il metodo in 6 passi</a></li>
+  <li><a href="#mente">⑦ Il ciclo mentale del dev</a></li>
+  <li><a href="#errori">⑧ Errori tipici</a></li>
+  <li><a href="#verifica">⑨ Verifica</a></li>
+  <li><a href="#esercizi">⑩ Esercizi</a></li>
+</ul>
+
+<!-- ================================================================== -->
+<h2 id="problema"><span class="section-num">1</span>Perché la documentazione sembra un muro</h2>
+<p>Non è una tua mancanza: la documentazione è scritta in un modo diverso da un corso, per un motivo preciso.</p>
+<div class="table-wrap"><table>
+<tr><th>Un corso…</th><th>La documentazione…</th><th>Conseguenza per te</th></tr>
+<tr><td>segue <b>un</b> progetto (CRWN)</td><td>deve servire <b>tutti</b> i progetti</td><td>gli esempi sono generici (<code>cities</code>, <code>"SF"</code>): devi tradurli tu</td></tr>
+<tr><td>avvolge le chiamate in funzioni (<code>createUserDocumentFromAuth</code>)</td><td>mostra le chiamate "nude"</td><td>non ritrovi i nomi del corso: devi riconoscere i <b>mattoni</b> dentro le funzioni</td></tr>
+<tr><td>va in un ordine</td><td>è un archivio da <b>consultare</b>, non da leggere dall'inizio</td><td>devi sapere <b>cosa cerchi</b> prima di aprirla</td></tr>
+<tr><td>sceglie per te piattaforma e versione</td><td>copre Web, iOS, Android, Node, versioni vecchie e nuove</td><td>devi scegliere la <b>scheda giusta</b></td></tr>
+<tr><td>spiega solo ciò che serve</td><td>è completa: tutte le opzioni, tutti i casi limite</td><td>devi imparare a <b>ignorare</b> quello che non ti serve adesso</td></tr>
+</table></div>
+<div class="callout"><span class="title">Il cambio di prospettiva</span>
+La documentazione non si <i>legge</i>, si <i>interroga</i>. Ci arrivi con una domanda precisa ("come leggo un documento?") e ne esci con una risposta precisa. Se la apri senza una domanda, ti perdi.</div>
+
+<!-- ================================================================== -->
+<h2 id="mappa"><span class="section-num">2</span>I 4 tipi di pagina</h2>
+<p>Quasi tutte le documentazioni moderne hanno quattro tipi di pagina, ognuno con uno scopo diverso. Riconoscere il tipo è il primo passo: ti dice <b>come</b> leggere la pagina.</p>
+<div class="card">
+<svg class="diagram" viewBox="0 0 900 400" role="img" aria-label="I quattro tipi di documentazione: tutorial, guida, reference, spiegazione">
+  <line x1="450" y1="30" x2="450" y2="370" class="wire" style="stroke:var(--line)"/>
+  <line x1="40" y1="200" x2="860" y2="200" class="wire" style="stroke:var(--line)"/>
+  <text x="245" y="22" text-anchor="middle" font-size="12" font-weight="700" class="muted">STAI IMPARANDO</text>
+  <text x="655" y="22" text-anchor="middle" font-size="12" font-weight="700" class="muted">STAI LAVORANDO</text>
+  <text x="20" y="115" font-size="12" font-weight="700" class="muted" transform="rotate(-90 20 115)" text-anchor="middle">PRATICA</text>
+  <text x="20" y="290" font-size="12" font-weight="700" class="muted" transform="rotate(-90 20 290)" text-anchor="middle">TEORIA</text>
+
+  <rect class="box react" x="50" y="40" width="390" height="150" rx="10"/>
+  <text x="70" y="70" font-weight="700" font-size="16">🎒 Tutorial / Get started</text>
+  <text x="70" y="96" font-size="13">Ti prende per mano dall'inizio alla fine.</text>
+  <text x="70" y="118" font-size="13">Firebase: "Get started with Cloud Firestore"</text>
+  <text x="70" y="146" font-size="12.5" class="muted">Leggilo UNA volta, dall'inizio, eseguendo tutto.</text>
+  <text x="70" y="168" font-size="12.5" class="muted">È la parte più vicina a un corso.</text>
+
+  <rect class="box auth" x="460" y="40" width="390" height="150" rx="10"/>
+  <text x="480" y="70" font-weight="700" font-size="16">🧭 Guida (how-to)</text>
+  <text x="480" y="96" font-size="13">Risponde a "come faccio X?" con uno snippet.</text>
+  <text x="480" y="118" font-size="13">Firebase: "Add data", "Get data", "Delete data"</text>
+  <text x="480" y="146" font-size="12.5" class="muted">Ci arrivi con una domanda. Cerca il titolo giusto,</text>
+  <text x="480" y="168" font-size="12.5" class="muted">prendi lo snippet, ignora il resto.</text>
+
+  <rect class="box" x="50" y="210" width="390" height="150" rx="10" style="stroke:var(--good)"/>
+  <text x="70" y="240" font-weight="700" font-size="16">💡 Spiegazione (concetti)</text>
+  <text x="70" y="266" font-size="13">Il "perché" e il "come funziona dentro".</text>
+  <text x="70" y="288" font-size="13">Firebase: "Cloud Firestore Data model"</text>
+  <text x="70" y="316" font-size="12.5" class="muted">Da leggere con calma, quando qualcosa</text>
+  <text x="70" y="338" font-size="12.5" class="muted">funziona ma non capisci PERCHÉ.</text>
+
+  <rect class="box fs" x="460" y="210" width="390" height="150" rx="10"/>
+  <text x="480" y="240" font-weight="700" font-size="16">📕 API Reference</text>
+  <text x="480" y="266" font-size="13">Il dizionario: ogni funzione, firma, parametri.</text>
+  <text x="480" y="288" font-size="13">Firebase: "firestore package" · MDN: ogni metodo</text>
+  <text x="480" y="316" font-size="12.5" class="muted">Ci vai per un DETTAGLIO: cosa restituisce?</text>
+  <text x="480" y="338" font-size="12.5" class="muted">Cosa succede se…? Quali errori lancia?</text>
+</svg>
+</div>
+<div class="callout warn"><span class="title">L'errore più comune</span>
+Usare la reference come se fosse un tutorial (leggerla dall'inizio, perdersi alla terza riga) oppure fermarsi al tutorial e non aprire mai la reference. Il dev esperto <b>parte dalla guida</b> per avere lo snippet, poi <b>apre la reference</b> sulla funzione che sta usando per verificare i dettagli.</div>
+
+<!-- ================================================================== -->
+<h2 id="guida"><span class="section-num">3</span>Anatomia di una guida Firebase</h2>
+<p>Prendiamo la pagina <a href="https://firebase.google.com/docs/firestore/query-data/get-data" target="_blank" rel="noopener">Get data with Cloud Firestore</a>. Le sue sezioni sono queste (titoli reali della pagina):</p>
+<div class="annot">
+<div class="card" style="font-size:14.5px">
+  <b>Get data with Cloud Firestore</b>
+  <ol style="margin:8px 0 0;padding-left:20px">
+    <li>Before you begin</li>
+    <li>Initialize Cloud Firestore</li>
+    <li>Example data</li>
+    <li><b>Get a document</b> ← <i>quello che cercavi</i></li>
+    <li>Get multiple documents from a collection</li>
+    <li>List subcollections of a document</li>
+  </ol>
+  <div style="margin-top:12px;display:flex;gap:6px;flex-wrap:wrap">
+    <span class="pill fs">Web</span><span class="pill" style="background:var(--surface-2);color:var(--muted)">Web</span><span class="pill" style="background:var(--surface-2);color:var(--muted)">Swift</span><span class="pill" style="background:var(--surface-2);color:var(--muted)">Kotlin</span><span class="pill" style="background:var(--surface-2);color:var(--muted)">Node.js</span><span class="pill" style="background:var(--surface-2);color:var(--muted)">…</span>
+  </div>
+</div>
+<div>
+<p><b>Come la leggi:</b></p>
+<ul style="font-size:15px">
+<li><b>Salta</b> "Before you begin" e "Initialize": lo hai già fatto in <code>firebase.utils.js</code>. Torna a leggerle solo se qualcosa non parte.</li>
+<li><b>"Example data"</b> è importante: crea i dati (<code>cities</code>, <code>SF</code>…) usati in tutti gli snippet. Guardala per capire <b>di cosa parlano gli esempi</b>.</li>
+<li>Vai dritto alla sezione che risponde alla tua domanda.</li>
+<li><b>Le schede delle lingue</b>: ci sono <b>due</b> schede chiamate "Web". La prima è l'API <b>modulare</b> (<code>doc(db, …)</code>, la tua). La seconda è l'API <b>namespaced</b>, quella vecchia (<code>db.collection(…).doc(…)</code>). Le riconosci dal codice, non dal nome.</li>
+</ul>
+</div>
+</div>
+<div class="grid-2">
+  <div class="callout good"><span class="title">✔ Modulare: la tua</span><pre class="code">import { doc, getDoc } from "firebase/firestore";
+const snap = await getDoc(doc(db, "cities", "SF"));</pre>Funzioni importate e chiamate passando <code>db</code>.</div>
+  <div class="callout bad"><span class="title">✘ Namespaced: non mescolarla</span><pre class="code">const snap = await db.collection("cities").doc("SF").get();</pre>Metodi a catena su <code>db</code>. È quella dei tutorial vecchi (v8).</div>
+</div>
+
+<!-- ================================================================== -->
+<h2 id="firma"><span class="section-num">4</span>Leggere una firma della API reference</h2>
+<p>La reference di Firebase è scritta in <b>TypeScript</b>: JavaScript con i <b>tipi</b> scritti esplicitamente. Non devi saper scrivere TypeScript per leggerla. Ti bastano 6 simboli.</p>
+
+<h3>getDoc: la firma ufficiale</h3>
+<p>Passa il mouse sui punti della lista per evidenziare le parti della firma.</p>
+<div class="annot stack">
+<pre class="code">export declare function getDoc&lt;
+  AppModelType,
+  DbModelType extends DocumentData
+&gt;(
+  reference: DocumentReference&lt;AppModelType, DbModelType&gt;
+): Promise&lt;DocumentSnapshot&lt;AppModelType, DbModelType&gt;&gt;;</pre>
+<ol>
+  <li data-lines="1"><b><code>export declare function getDoc</code></b>: "esiste una funzione esportata che si chiama getDoc". <code>declare</code> vuol dire che qui c'è solo la descrizione, non il codice. Puoi importarla.</li>
+  <li data-lines="2-4"><b><code>&lt;AppModelType, DbModelType …&gt;</code></b>: i <b>generics</b>, tipi "segnaposto" per chi usa TypeScript con modelli personalizzati. <b>In JavaScript puoi ignorarli.</b> Mentalmente leggi <code>DocumentReference&lt;…&gt;</code> come semplice <code>DocumentReference</code>.</li>
+  <li data-lines="5"><b><code>reference: DocumentReference</code></b>: un parametro. Prima dei <code>:</code> c'è il <b>nome</b>, dopo il <b>tipo</b>. Vuol dire: "dammi un indirizzo", cioè quello che produce <code>doc()</code>.</li>
+  <li data-lines="6"><b><code>): Promise&lt;DocumentSnapshot&gt;</code></b>: i <code>:</code> dopo la parentesi chiusa indicano cosa <b>restituisce</b>. Una <b>Promise</b> di una <b>foto</b>. Quindi ti serve <code>await</code> e quello che ottieni è uno snapshot.</li>
+</ol>
+</div>
+<div class="callout good"><span class="title">La firma tradotta in una frase</span>
+<b>getDoc riceve un indirizzo e restituisce la promessa di una fotografia.</b> Ogni firma si può ridurre a una frase così: <i>"[nome] riceve [parametri] e restituisce [tipo di ritorno]"</i>. Se riesci a dirla, hai capito la funzione.</div>
+
+<h3>doc: parametri "a fisarmonica" ed eccezioni</h3>
+<div class="annot stack">
+<pre class="code">export declare function doc(
+  firestore: Firestore,
+  path: string,
+  ...pathSegments: string[]
+): DocumentReference&lt;DocumentData, DocumentData&gt;;
+
+// Exceptions:
+// If the final path has an odd number of segments
+// and does not point to a document.</pre>
+<ol>
+  <li data-lines="2"><b><code>firestore: Firestore</code></b>: l'istanza <code>db</code>.</li>
+  <li data-lines="3"><b><code>path: string</code></b>: almeno <b>una</b> stringa, il percorso (anche con gli slash: <code>'users/abc'</code>).</li>
+  <li data-lines="4"><b><code>...pathSegments: string[]</code></b>: il <b>rest parameter</b>. I tre puntini vogliono dire "altre stringhe, quante vuoi, separate da virgole". Per questo <code>doc(db, 'users', uid)</code> e <code>doc(db, 'users/' + uid)</code> sono equivalenti. <code>string[]</code> = array di stringhe.</li>
+  <li data-lines="5"><b>Ritorno</b>: un <code>DocumentReference</code>, <b>senza Promise</b>. Quindi è <b>sincrona</b>, niente await.</li>
+  <li data-lines="7-9"><b>Exceptions</b>: la sezione che quasi tutti saltano. Ti dice che con un numero dispari di segmenti <b>lancia un errore</b>, subito e in modo sincrono.</li>
+</ol>
+</div>
+
+<h3>setDoc: due firme, una funzione (overload)</h3>
+<pre class="code">// setDoc(reference, data)
+export declare function setDoc(reference: DocumentReference, data: WithFieldValue): Promise&lt;void&gt;;
+
+// setDoc(reference, data, options)
+export declare function setDoc(reference: DocumentReference, data: PartialWithFieldValue, options: SetOptions): Promise&lt;void&gt;;</pre>
+<p style="font-size:13px;color:var(--muted)">Generics rimossi per leggibilità. Firma completa: <a href="https://firebase.google.com/docs/reference/js/firestore_.md#setdoc_f47a2ea" target="_blank" rel="noopener">API reference di setDoc</a>.</p>
+<p>Quando una funzione ha <b>più firme</b> (overload), la reference le elenca separatamente. Leggile come "puoi chiamarla in uno di questi modi". Dettagli che ora sai leggere:</p>
+<ul>
+  <li><code>Promise&lt;void&gt;</code>: è una Promise, ma il valore finale è <b>niente</b>. Il <code>await</code> serve ad aspettare (o a intercettare l'errore), non a ottenere un dato. <code>const x = await setDoc(...)</code> → <code>x</code> è <code>undefined</code>.</li>
+  <li><code>WithFieldValue</code> e <code>PartialWithFieldValue</code>: con le opzioni (per esempio <code>{merge: true}</code>) puoi passare dati <b>parziali</b>. Senza opzioni, i dati sono il documento intero.</li>
+</ul>
+
+<h3>Il prontuario dei simboli</h3>
+<div class="table-wrap"><table>
+<tr><th>Simbolo</th><th>Significa</th><th>Esempio</th></tr>
+<tr><td><code>nome: Tipo</code></td><td>parametro e suo tipo</td><td><code>path: string</code></td></tr>
+<tr><td><code>): Tipo</code></td><td>tipo restituito</td><td><code>): DocumentReference</code></td></tr>
+<tr><td><code>Promise&lt;X&gt;</code></td><td>asincrona: con await ottieni X</td><td><code>Promise&lt;DocumentSnapshot&gt;</code></td></tr>
+<tr><td><code>...nome: T[]</code></td><td>quanti argomenti vuoi di tipo T</td><td><code>...pathSegments: string[]</code></td></tr>
+<tr><td><code>nome?: T</code></td><td>parametro <b>opzionale</b></td><td><code>options?: SetOptions</code></td></tr>
+<tr><td><code>A | B</code></td><td>può essere A <b>oppure</b> B</td><td><code>string | null</code></td></tr>
+<tr><td><code>&lt;T, U&gt;</code> dopo il nome</td><td>generics: in JS li ignori</td><td><code>getDoc&lt;AppModelType, …&gt;</code></td></tr>
+</table></div>
+
+<!-- ================================================================== -->
+<h2 id="mdn"><span class="section-num">5</span>Leggere MDN (la reference di JavaScript)</h2>
+<p><a href="https://developer.mozilla.org/" target="_blank" rel="noopener">MDN Web Docs</a> è la documentazione di riferimento di JavaScript e delle API del browser. Ogni pagina di un metodo ha <b>sempre</b> le stesse sezioni, nello stesso ordine:</p>
+<div class="grid-2">
+<div class="card" style="font-size:14.5px">
+<b>Array.prototype.find()</b>
+<ol style="margin:8px 0 0;padding-left:20px">
+  <li><b>Intro + Try it</b>: una frase e un esempio interattivo</li>
+  <li><b>Syntax</b>: come si chiama</li>
+  <li><b>Parameters</b>: cosa passi</li>
+  <li><b>Return value</b>: cosa ottieni</li>
+  <li><b>Exceptions</b> (non sempre): quando esplode</li>
+  <li><b>Description</b>: come funziona davvero</li>
+  <li><b>Examples</b>: casi d'uso</li>
+  <li><b>Specifications · Browser compatibility</b></li>
+</ol>
+</div>
+<div>
+<p><b>Ordine di lettura del dev:</b> Syntax → Return value → Parameters → un esempio. Description solo se qualcosa ti sorprende. Exceptions <b>sempre</b>, almeno con un'occhiata.</p>
+<p><b>La sintassi su più righe</b> indica gli argomenti opzionali:</p>
+<pre class="code">find(callbackFn)
+find(callbackFn, thisArg)</pre>
+<p>Due righe vuol dire che <code>thisArg</code> è facoltativo. Nella sezione Parameters, <code>callbackFn</code> è descritta con i suoi argomenti: <code>element</code>, <code>index</code>, <code>array</code>.</p>
+</div>
+</div>
+
+<h3>"prototype" e metodi statici: il dettaglio che confonde</h3>
+<div class="table-wrap"><table>
+<tr><th>Titolo su MDN</th><th>Tipo</th><th>Come lo scrivi</th></tr>
+<tr><td><code>Array.prototype.find()</code></td><td>metodo d'<b>istanza</b>: lo chiami su un array</td><td><code>products.find(p =&gt; p.id === 3)</code></td></tr>
+<tr><td><code>String.prototype.trim()</code></td><td>metodo d'istanza su una stringa</td><td><code>displayName.trim()</code></td></tr>
+<tr><td><code>Object.entries()</code></td><td>metodo <b>statico</b>: lo chiami sul costruttore</td><td><code>Object.entries(formFields)</code></td></tr>
+<tr><td><code>Array.isArray()</code></td><td>metodo statico</td><td><code>Array.isArray(x)</code></td></tr>
+</table></div>
+<div class="callout"><span class="title">Regola</span>
+Se nel titolo c'è <code>.prototype.</code>, al posto di <code>Array.prototype</code> metti <b>il tuo array</b>. Se non c'è, scrivi il nome esattamente com'è. <code>formFields.entries()</code> non esiste: <code>entries</code> è un metodo statico di <code>Object</code>.</div>
+
+<!-- ================================================================== -->
+<h2 id="metodo"><span class="section-num">6</span>Il metodo in 6 passi</h2>
+<div class="card">
+<svg class="diagram" viewBox="0 0 900 250" role="img" aria-label="Sei passi per usare la documentazione">
+  <defs><marker id="ah-m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" style="fill:var(--accent)"/></marker></defs>
+  <g font-size="13">
+    <rect class="box" x="10" y="30" width="135" height="120" rx="10" style="stroke:var(--accent)"/>
+    <text x="77" y="58" text-anchor="middle" font-weight="700">1 · Domanda</text>
+    <text x="77" y="84" text-anchor="middle" font-size="12">verbo + oggetto:</text>
+    <text x="77" y="104" text-anchor="middle" font-size="12" class="mono">"leggere un</text>
+    <text x="77" y="122" text-anchor="middle" font-size="12" class="mono">documento"</text>
+
+    <rect class="box" x="160" y="30" width="135" height="120" rx="10" style="stroke:var(--accent)"/>
+    <text x="227" y="58" text-anchor="middle" font-weight="700">2 · Tipo pagina</text>
+    <text x="227" y="84" text-anchor="middle" font-size="12">"come si fa" →</text>
+    <text x="227" y="104" text-anchor="middle" font-size="12">guida</text>
+    <text x="227" y="124" text-anchor="middle" font-size="12">dettaglio → reference</text>
+
+    <rect class="box" x="310" y="30" width="135" height="120" rx="10" style="stroke:var(--accent)"/>
+    <text x="377" y="58" text-anchor="middle" font-weight="700">3 · Versione</text>
+    <text x="377" y="84" text-anchor="middle" font-size="12">scheda Web modulare?</text>
+    <text x="377" y="104" text-anchor="middle" font-size="12">import da</text>
+    <text x="377" y="124" text-anchor="middle" font-size="12" class="mono">'firebase/…'?</text>
+
+    <rect class="box" x="460" y="30" width="135" height="120" rx="10" style="stroke:var(--accent)"/>
+    <text x="527" y="58" text-anchor="middle" font-weight="700">4 · Snippet</text>
+    <text x="527" y="84" text-anchor="middle" font-size="12">riga per riga:</text>
+    <text x="527" y="104" text-anchor="middle" font-size="12">cosa entra?</text>
+    <text x="527" y="124" text-anchor="middle" font-size="12">cosa esce?</text>
+
+    <rect class="box" x="610" y="30" width="135" height="120" rx="10" style="stroke:var(--accent)"/>
+    <text x="677" y="58" text-anchor="middle" font-weight="700">5 · Traduci</text>
+    <text x="677" y="84" text-anchor="middle" font-size="12">tabella:</text>
+    <text x="677" y="104" text-anchor="middle" font-size="12" class="mono">cities → users</text>
+    <text x="677" y="124" text-anchor="middle" font-size="12">fisso → parametro</text>
+
+    <rect class="box" x="760" y="30" width="130" height="120" rx="10" style="stroke:var(--accent)"/>
+    <text x="825" y="58" text-anchor="middle" font-weight="700">6 · Verifica</text>
+    <text x="825" y="84" text-anchor="middle" font-size="12">reference:</text>
+    <text x="825" y="104" text-anchor="middle" font-size="12">Returns,</text>
+    <text x="825" y="124" text-anchor="middle" font-size="12">Exceptions, note</text>
+  </g>
+  <path class="wire flow" d="M145 90 H158" marker-end="url(#ah-m)" style="stroke:var(--accent)"/>
+  <path class="wire flow" d="M295 90 H308" marker-end="url(#ah-m)" style="stroke:var(--accent)"/>
+  <path class="wire flow" d="M445 90 H458" marker-end="url(#ah-m)" style="stroke:var(--accent)"/>
+  <path class="wire flow" d="M595 90 H608" marker-end="url(#ah-m)" style="stroke:var(--accent)"/>
+  <path class="wire flow" d="M745 90 H758" marker-end="url(#ah-m)" style="stroke:var(--accent)"/>
+  <path class="wire" d="M825 150 V200 H77 V152" marker-end="url(#ah-m)" style="stroke:var(--accent);stroke-dasharray:4 4"/>
+  <text x="450" y="222" text-anchor="middle" font-size="12.5" class="muted">se la verifica smentisce quello che pensavi → nuova domanda più precisa, e si ricomincia</text>
+</svg>
+</div>
+
+<h3>Esempio svolto: "voglio contare quante volte un utente ha fatto login"</h3>
+<ol>
+  <li><b>Domanda</b>: "incrementare un numero in un documento".</li>
+  <li><b>Tipo di pagina</b>: è un "come si fa", quindi una <b>guida</b>. Su Firebase: <i>Add data</i> → sezione <i>Increment a numeric value</i>.</li>
+  <li><b>Versione</b>: scheda Web modulare, si riconosce dall'import da <code>"firebase/firestore"</code>.</li>
+  <li><b>Snippet</b>:
+<pre class="code">import { doc, updateDoc, increment } from "firebase/firestore";
+
+const washingtonRef = doc(db, "cities", "DC");
+
+await updateDoc(washingtonRef, {
+    population: increment(50)
+});</pre>
+  Riga per riga: indirizzo (<code>doc</code>), poi aggiornamento di <b>un solo campo</b> (<code>updateDoc</code>), con un valore speciale (<code>increment</code>) che chiede al <b>server</b> di sommare.</li>
+  <li><b>Traduci</b>: <code>"cities"</code> → <code>'users'</code>, <code>"DC"</code> → <code>uid</code> (parametro), <code>population</code> → <code>loginCount</code>, <code>50</code> → <code>1</code>.</li>
+  <li><b>Verifica nella reference</b>:
+    <ul>
+      <li><code>updateDoc</code>: <i>"The update will fail if applied to a document that does not exist."</i> → se l'utente non ha documento, <b>errore</b>. Devo gestirlo?</li>
+      <li><code>increment</code>: se il campo non esiste ancora, la trasformazione lo <b>imposta</b> al valore dato. Al primo login <code>loginCount</code> diventa 1 senza bisogno di inizializzarlo.</li>
+    </ul>
+  </li>
+</ol>
+<p>Ecco la differenza tra copiare uno snippet e <b>capirlo</b>: i due dettagli del passo 6 non sono nello snippet, sono nella reference.</p>
+
+<!-- ================================================================== -->
+<h2 id="mente"><span class="section-num">7</span>Il ciclo mentale del dev</h2>
+<p>Leggere la documentazione è un caso particolare di un'abitudine più generale. Chi diventa bravo non è chi sbaglia meno: è chi <b>impara di più da ogni errore</b>. Lo fa con un ciclo preciso, che vale per il codice, per la doc e per questi esercizi.</p>
+<div class="card">
+<svg class="diagram" viewBox="0 0 900 230" role="img" aria-label="Ciclo prevedi, esegui, confronta, spiega, generalizza">
+  <defs><marker id="ah-c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" style="fill:var(--ink)"/></marker></defs>
+  <g font-size="13">
+    <rect class="box react" x="10" y="40" width="160" height="110" rx="55"/><text x="90" y="85" text-anchor="middle" font-weight="700">1 · PREVEDI</text><text x="90" y="106" text-anchor="middle" font-size="11.5">scrivi cosa ti aspetti</text><text x="90" y="122" text-anchor="middle" font-size="11.5">PRIMA di eseguire</text>
+    <rect class="box auth" x="190" y="40" width="160" height="110" rx="55"/><text x="270" y="85" text-anchor="middle" font-weight="700">2 · ESEGUI</text><text x="270" y="106" text-anchor="middle" font-size="11.5">o leggi la reference,</text><text x="270" y="122" text-anchor="middle" font-size="11.5">o lancia i test</text>
+    <rect class="box fs" x="370" y="40" width="160" height="110" rx="55"/><text x="450" y="85" text-anchor="middle" font-weight="700">3 · CONFRONTA</text><text x="450" y="106" text-anchor="middle" font-size="11.5">dove la realtà</text><text x="450" y="122" text-anchor="middle" font-size="11.5">ti ha smentito?</text>
+    <rect class="box" x="550" y="40" width="160" height="110" rx="55" style="stroke:var(--warn)"/><text x="630" y="85" text-anchor="middle" font-weight="700">4 · SPIEGA</text><text x="630" y="106" text-anchor="middle" font-size="11.5">quale IDEA era</text><text x="630" y="122" text-anchor="middle" font-size="11.5">sbagliata?</text>
+    <rect class="box" x="730" y="40" width="160" height="110" rx="55" style="stroke:var(--good)"/><text x="810" y="85" text-anchor="middle" font-weight="700">5 · GENERALIZZA</text><text x="810" y="106" text-anchor="middle" font-size="11.5">in quali altri casi</text><text x="810" y="122" text-anchor="middle" font-size="11.5">vale la stessa regola?</text>
+  </g>
+  <path class="wire" d="M170 95 H188" marker-end="url(#ah-c)" style="stroke:var(--ink)"/>
+  <path class="wire" d="M350 95 H368" marker-end="url(#ah-c)" style="stroke:var(--ink)"/>
+  <path class="wire" d="M530 95 H548" marker-end="url(#ah-c)" style="stroke:var(--ink)"/>
+  <path class="wire" d="M710 95 H728" marker-end="url(#ah-c)" style="stroke:var(--ink)"/>
+  <path class="wire" d="M810 150 V190 H90 V152" marker-end="url(#ah-c)" style="stroke:var(--ink);stroke-dasharray:4 4"/>
+  <text x="450" y="212" text-anchor="middle" font-size="12.5" class="muted">il passo 1 è quello che quasi tutti saltano, ed è quello che ti fa imparare</text>
+</svg>
+</div>
+<div class="grid-2">
+<div class="callout bad"><span class="title">Studente passivo</span>
+<ul>
+<li>Esegue il codice per "vedere cosa fa".</li>
+<li>Se funziona va avanti, anche senza sapere perché.</li>
+<li>Se non funziona cambia righe a caso finché va.</li>
+<li>Legge l'errore a metà, o non lo legge.</li>
+<li>Impara la <b>riga</b>, non l'<b>idea</b>.</li>
+</ul></div>
+<div class="callout good"><span class="title">Dev</span>
+<ul>
+<li>Prima di eseguire, <b>scrive</b> cosa si aspetta.</li>
+<li>Quando funziona, sa dire perché e cosa lo romperebbe.</li>
+<li>Quando non funziona, <b>riduce</b> il problema al caso più piccolo.</li>
+<li>Legge l'errore <b>tutto</b>: tipo, messaggio, file, riga.</li>
+<li>Per ogni funzione si chiede: <b>qual è il contratto?</b> Cosa entra, cosa esce, quando fallisce.</li>
+</ul></div>
+</div>
+<div class="callout"><span class="title">Le 5 domande da farsi sempre</span>
+<ol style="margin:0">
+<li>Cosa entra e cosa esce, con <b>valori concreti</b>?</li>
+<li>È sincrono o asincrono? Dove aspetto?</li>
+<li>Cosa succede se il dato manca (<code>null</code>, <code>undefined</code>, array vuoto)?</li>
+<li>Chi intercetta gli errori, e chi ne viene a sapere?</li>
+<li>Questo è un indirizzo o un valore? Un riferimento o una copia?</li>
+</ol></div>
+
+<!-- ================================================================== -->
+<h2 id="errori"><span class="section-num">8</span>Errori tipici nel leggere la documentazione</h2>
+<div class="card"><h3 style="margin-top:0">❶ Copiare codice della versione sbagliata</h3>
+<p>Un tutorial del 2020 o un vecchio post di Stack Overflow ti danno <code>firebase.firestore().collection('users')</code>. Lo incolli, e <code>firebase is not defined</code>.</p>
+<div class="grid-2"><div class="callout bad"><span class="title">Modello sbagliato</span>"Se è codice Firebase, funziona con Firebase."</div><div class="callout good"><span class="title">Modello giusto</span>"Prima di copiare, controllo la <b>versione</b>: import modulari da <code>'firebase/…'</code> sì, catene su <code>firebase.</code> o <code>db.</code> no."</div></div></div>
+
+<div class="card"><h3 style="margin-top:0">❷ Ignorare "Returns"</h3>
+<p>Non leggi che <code>getDoc</code> restituisce una <code>Promise</code>, dimentichi <code>await</code> e ottieni <code>snap.exists is not a function</code>.</p>
+<div class="grid-2"><div class="callout bad"><span class="title">Modello sbagliato</span>"Una funzione mi dà quello che ha nel nome."</div><div class="callout good"><span class="title">Modello giusto</span>"Una funzione mi dà <b>quello che c'è scritto dopo i due punti</b> della firma. Se c'è Promise, serve await."</div></div></div>
+
+<div class="card"><h3 style="margin-top:0">❸ Copiare i nomi dell'esempio</h3>
+<p>Nel tuo codice compare <code>doc(db, "cities", uid)</code>: hai copiato lo snippet ma non l'hai tradotto. Il codice non dà errore, scrive nella collection sbagliata.</p>
+<div class="grid-2"><div class="callout bad"><span class="title">Modello sbagliato</span>"Lo snippet è codice da incollare."</div><div class="callout good"><span class="title">Modello giusto</span>"Lo snippet è uno <b>stampo</b>: ogni nome va tradotto nel mio dominio."</div></div></div>
+
+<div class="card"><h3 style="margin-top:0">❹ Leggere lo snippet e saltare le note</h3>
+<p>La nota sull'<code>await</code> di <code>setDoc</code>, l'avvertimento che <code>deleteDoc</code> <b>non</b> cancella le sotto-collection, il fatto che <code>updateDoc</code> fallisce sui documenti inesistenti: tutte queste informazioni stanno nelle note e nella reference, non negli snippet.</p></div>
+
+<div class="card"><h3 style="margin-top:0">❺ Confondere statico e d'istanza</h3>
+<pre class="code">formFields.entries()        // TypeError: formFields.entries is not a function
+Object.entries(formFields)  // [['displayName', 'Leo'], ['email', '…'], …]</pre></div>
+
+<!-- ================================================================== -->
+<h2 id="verifica"><span class="section-num">9</span>Verifica</h2>
+<div class="callout" id="score"></div>
+<div id="q1"></div><div id="q2"></div><div id="q3"></div><div id="q4"></div><div id="q5"></div><div id="q6"></div><div id="q7"></div>
+
+<!-- ================================================================== -->
+<h2 id="esercizi"><span class="section-num">10</span>Esercizi</h2>
+<p>Questi esercizi allenano la <b>competenza</b>, non un argomento. Le cartelle sono <code>learning/esercizi/t1/</code>.</p>
+<div id="ex-list"></div>
+
+<div class="footer-nav">
+  <a class="btn" href="m3-firestore.html">← M3 Firestore</a>
+  <a class="btn" href="../index.html">Dashboard →</a>
+</div>
+</main>
+</div>
+<script src="../assets/manifest.js"></script>
+<script src="../assets/registro.js"></script>
+<script src="../assets/glossario.js"></script>
+<script src="../assets/app.js"></script>
+<script>
+Lab.quiz('#q1', { id: 't1-q1', question: 'La reference dice: <code>getDoc(reference: DocumentReference): Promise&lt;DocumentSnapshot&gt;</code>. Quale riga ti dà davvero in mano una foto del documento?',
+  options: [
+    { t: '<code>const snap = getDoc(doc(db, \'users\', uid));</code>', why: '<span class="step">Guarda il tipo di ritorno: <code>Promise&lt;…&gt;</code>. Senza <code>await</code> hai in mano la Promise, non quello che c\'è dentro.</span>' },
+    { t: '<code>const snap = await getDoc(doc(db, \'users\', uid));</code>', ok: true, why: '<span class="step"><code>await</code> "apre" la Promise e ti dà il <code>DocumentSnapshot</code>. La firma te lo diceva: bastava leggere dopo i due punti.</span>' },
+    { t: '<code>const snap = await getDoc(db, \'users\', uid);</code>', why: '<span class="step">Rileggi i parametri: <code>getDoc</code> ne ha <b>uno solo</b>, <code>reference: DocumentReference</code>. Il percorso lo vuole <code>doc()</code>, non <code>getDoc()</code>. Questo è un errore da "non ho letto la firma".</span>' },
+  ] });
+Lab.quiz('#q2', { id: 't1-q2', question: 'Firma: <code>doc(firestore: Firestore, path: string, ...pathSegments: string[])</code>. Quali chiamate sono valide?<br><code>A) doc(db, \'users/abc\')</code> &nbsp; <code>B) doc(db, \'users\', \'abc\')</code> &nbsp; <code>C) doc(db, [\'users\', \'abc\'])</code>',
+  options: [
+    { t: 'Solo B', why: '<span class="step"><code>path: string</code> accetta un percorso con gli slash: lo dice la descrizione del parametro, "A slash-separated path". Quindi anche A è valida.</span>' },
+    { t: 'A e B', ok: true, why: '<span class="step">A: tutto il percorso in <code>path</code>. B: <code>path</code> più un elemento in <code>...pathSegments</code>. In C passi un <b>array</b> dove la firma vuole una <code>string</code>: <code>...pathSegments: string[]</code> significa "più stringhe separate da virgole", non "un array".</span><span class="step">Il simbolo <code>string[]</code> dopo i tre puntini descrive come la funzione <b>riceve</b> gli argomenti al suo interno, non come li passi tu.</span>' },
+    { t: 'A, B e C', why: '<span class="step">C passa un array come secondo argomento, ma il secondo parametro è <code>path: string</code>. Il rest parameter raccoglie argomenti separati; per spargere un array dovresti scrivere <code>doc(db, ...[\'users\', \'abc\'])</code>.</span>' },
+  ] });
+Lab.quiz('#q3', { id: 't1-q3', question: 'La reference di <code>doc()</code> elenca un\'eccezione per i percorsi con segmenti dispari. Il ritorno di <code>doc()</code> non è una Promise. Questo codice intercetta l\'errore?', code: "try {\n  const ref = doc(db, 'users');\n} catch (e) {\n  console.log('preso:', e.message);\n}",
+  options: [
+    { t: 'Sì: <code>doc()</code> è sincrona, quindi lancia subito e il catch lo prende anche senza await', ok: true, why: '<span class="step">Funzione sincrona vuol dire che l\'errore viene lanciato <b>durante</b> la chiamata, dentro il <code>try</code>. <code>await</code> serve solo per le Promise.</span><span class="step">Collega due sezioni della reference (Returns ed Exceptions) per dedurre un comportamento che nessuna delle due dice esplicitamente: questo è leggere da dev.</span>' },
+    { t: 'No: senza await il catch non vede niente', why: '<span class="step">Vale per le funzioni che restituiscono <b>Promise</b>: l\'errore arriva più tardi, quando il <code>try</code> è già finito. <code>doc()</code> restituisce un <code>DocumentReference</code>, non una Promise.</span>' },
+    { t: 'No: <code>doc()</code> non lancia mai errori, li lancia <code>getDoc()</code>', why: '<span class="step">La sezione <b>Exceptions</b> della reference di <code>doc()</code> dice il contrario. È proprio la sezione che di solito si salta.</span>' },
+  ] });
+Lab.quiz('#q4', { id: 't1-q4', question: 'Su MDN, <code>Array.prototype.find()</code> → Return value: il primo elemento che soddisfa la condizione, altrimenti <code>undefined</code>. Cosa succede qui se nessun prodotto ha id 99?', code: "const name = products.find((p) => p.id === 99).name;",
+  options: [
+    { t: '<code>name</code> vale <code>undefined</code>', why: '<span class="step">Separa i due passi. <code>products.find(...)</code> → <code>undefined</code>. Poi <code>undefined.name</code>: leggere una proprietà di undefined non dà undefined, <b>lancia un errore</b>.</span>' },
+    { t: 'TypeError: Cannot read properties of undefined (reading \'name\')', ok: true, why: '<span class="step">La sezione "Return value" ti aveva avvisato del caso <code>undefined</code>. Chi la legge scrive <code>products.find(...)?.name</code> oppure controlla prima del <code>.name</code>.</span><span class="step">Generalizza: ogni volta che un metodo "può non trovare", la reference ti dice cosa restituisce in quel caso. Va gestito.</span>' },
+    { t: '<code>name</code> vale stringa vuota', why: '<span class="step">Nessun metodo "inventa" un valore di comodo. Il Return value di MDN è preciso: <code>undefined</code>.</span>' },
+  ] });
+Lab.quiz('#q5', { id: 't1-q5', question: 'Trovi online questo codice per leggere un utente. È utilizzabile così com\'è nel tuo progetto?', code: "const snap = await db.collection('users').doc(uid).get();\nif (snap.exists) { ... }",
+  options: [
+    { t: 'Sì, è solo uno stile diverso', why: '<span class="step">Non è uno stile: è un\'altra <b>API</b>, quella namespaced (v8). Il tuo <code>db</code> creato con <code>getFirestore()</code> non ha il metodo <code>.collection</code>. Nota anche <code>snap.exists</code> senza parentesi: nella v8 era una proprietà, nella modulare è un metodo.</span>' },
+    { t: 'No: è l\'API namespaced/v8; va tradotto in <code>await getDoc(doc(db, \'users\', uid))</code> e <code>snap.exists()</code>', ok: true, why: '<span class="step">Due indizi: le catene di metodi su <code>db</code>, e <code>exists</code> usato come proprietà. Anche quando trovi il concetto giusto in un tutorial vecchio, la sintassi va tradotta.</span>' },
+    { t: 'Sì, basta aggiungere <code>import { collection } from \'firebase/firestore\'</code>', why: '<span class="step">Importare <code>collection</code> ti dà una <b>funzione</b> da chiamare come <code>collection(db, \'users\')</code>. Non aggiunge un metodo <code>.collection</code> all\'oggetto <code>db</code>.</span>' },
+  ] });
+Lab.quiz('#q6', { id: 't1-q6', question: 'Su MDN, <code>Array.prototype.reduce()</code> ha una sezione <b>Exceptions</b>. Cosa succede con <code>[].reduce((sum, x) =&gt; sum + x)</code>?',
+  options: [
+    { t: 'Restituisce 0', why: '<span class="step">Restituirebbe 0 solo se gli passassi <code>0</code> come valore iniziale: <code>[].reduce((s, x) =&gt; s + x, 0)</code>. Senza, non ha da dove partire.</span>' },
+    { t: 'Restituisce <code>undefined</code>', why: '<span class="step">È l\'intuizione di molti, ma la sezione Exceptions dice altro: è uno dei pochi casi in cui un metodo degli array <b>lancia</b>.</span>' },
+    { t: 'TypeError: array vuoto senza valore iniziale', ok: true, why: '<span class="step">MDN, sezione Exceptions: TypeError se l\'array non ha elementi e non fornisci <code>initialValue</code>. Un carrello vuoto (caso normalissimo) farebbe crashare il totale. Per questo si passa <b>sempre</b> il valore iniziale.</span>' },
+  ] });
+Lab.quiz('#q7', { id: 't1-q7', type: 'order', question: 'Devi cancellare il documento di un utente e non l\'hai mai fatto. Ordina i passi del metodo:',
+  items: ['Formulo: "cancellare un documento"', 'Apro la guida "Delete data"', 'Scelgo la scheda Web modulare', 'Leggo lo snippet: deleteDoc(doc(db, "cities", "DC"))', 'Traduco: "cities" → "users", "DC" → uid', 'Controllo note e reference: le sotto-collection NON vengono cancellate'],
+  why: 'Il metodo va dal generale al particolare: domanda → pagina → versione → snippet → traduzione → dettagli. Se salti la verifica finale, scopri il problema delle sotto-collection in produzione.',
+  explain: ['La nota "Deleting a document does not delete its subcollections" è nella guida ufficiale: un utente cancellato potrebbe lasciare <code>users/{uid}/orders</code> orfani.'] });
+Lab.quizScore('#score');
+Lab.exercises('#ex-list', 't1');
+</script>
+</body>
+</html>

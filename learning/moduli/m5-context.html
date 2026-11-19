@@ -1,0 +1,793 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>M5 · Context API</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .sim { font: 13px var(--mono); }
+  .sim .node { border: 1.5px solid var(--line); border-radius: 8px; padding: 6px 10px; margin: 6px 0 6px 18px; background: var(--surface); transition: background .25s, border-color .25s; }
+  .sim .node > .lbl { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .sim .uses { font-size: 11px; color: var(--muted); }
+  .sim .node.state { border-color: var(--warn); background: var(--warn-soft); }
+  .sim .node.consumer { border-color: var(--c-react); background: var(--c-react-soft); }
+  .sim .node.cascade { border-color: var(--c-fs); background: var(--c-fs-soft); }
+  .sim .node.skip > .lbl { opacity: .45; }
+  .sim .node.passed > .lbl::after { content: "passato da sopra"; font-size: 10.5px; color: var(--muted); border: 1px dashed var(--line); padding: 0 5px; border-radius: 4px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 13px; margin: 8px 0; }
+  .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 4px; border: 1.5px solid; }
+</style>
+</head>
+<body data-root=".." data-module="m5">
+<div class="lab">
+<nav class="lab-nav" id="lab-nav"></nav>
+<main class="lab-main">
+
+<div class="kicker">Modulo 5 · React Context API</div>
+<h1>Context: dati condivisi senza passarli a mano</h1>
+<p class="lead">createContext, Provider, useContext, il listener di Firebase dentro useEffect e, soprattutto, <b>chi fa re-render e perché</b>. È il modulo in cui tutto quello che hai visto finora (Auth, Firestore, state) si collega.</p>
+<ul class="toc">
+  <li><a href="#problema">① Il problema</a></li>
+  <li><a href="#teoria">② Teoria</a></li>
+  <li><a href="#modello">③ Modello mentale</a></li>
+  <li><a href="#flusso">④ Flusso animato</a></li>
+  <li><a href="#dati">⑤ Forma dei dati</a></li>
+  <li><a href="#codice">⑥ Nel codice del corso</a></li>
+  <li><a href="#componenti">⑦ Nei componenti: re-render</a></li>
+  <li><a href="#documentazione">⑧ Doc ufficiale ↔ corso</a></li>
+  <li><a href="#errori">⑨ Errori tipici</a></li>
+  <li><a href="#verifica">⑩ Verifica</a></li>
+  <li><a href="#esercizi">⑪ Esercizi</a></li>
+</ul>
+
+<div class="callout warn"><span class="title">Dove sei nel corso</span>
+Il tuo <code>src/contexts/</code> è ancora vuoto. Qui il codice è quello delle lezioni ufficiali del corso: <b>lezione 10</b> (UserContext), <b>lezione 11</b> (listener centralizzato), <b>12</b> (ProductsContext) e <b>13–16</b> (CartContext). Puoi studiarlo prima o insieme al video: quando scriverai il tuo, saprai già <b>perché</b> è fatto così.</div>
+
+<!-- ================================================================== -->
+<h2 id="problema"><span class="section-num">1</span>Il problema: due componenti lontani, un dato in comune</h2>
+<p>Dopo il login, <code>SignInForm</code> conosce l'utente. <code>Navigation</code> deve mostrare "SIGN OUT" invece di "SIGN IN". Guarda dove stanno nell'albero:</p>
+<div class="card">
+<svg class="diagram" viewBox="0 0 900 330" role="img" aria-label="Prop drilling contro Context">
+  <defs>
+    <marker id="pd" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" style="fill:var(--bad)"/></marker>
+    <marker id="pc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" style="fill:var(--c-react)"/></marker>
+  </defs>
+  <text x="215" y="22" text-anchor="middle" font-weight="700" style="fill:var(--bad)">SENZA Context: prop drilling</text>
+  <g font-size="12.5" class="mono">
+    <rect class="box" x="155" y="40" width="120" height="34" rx="7"/><text x="215" y="62" text-anchor="middle">App ★state</text>
+    <rect class="box" x="155" y="100" width="120" height="34" rx="7"/><text x="215" y="122" text-anchor="middle">Routes</text>
+    <rect class="box" x="155" y="160" width="120" height="34" rx="7"/><text x="215" y="182" text-anchor="middle">Navigation</text>
+    <rect class="box" x="40" y="225" width="150" height="34" rx="7"/><text x="115" y="247" text-anchor="middle">Authentication</text>
+    <rect class="box" x="40" y="285" width="150" height="34" rx="7"/><text x="115" y="307" text-anchor="middle">SignInForm</text>
+    <rect class="box" x="240" y="225" width="120" height="34" rx="7"/><text x="300" y="247" text-anchor="middle">Home</text>
+  </g>
+  <path class="wire" d="M215 74 V100 M215 134 V160 M200 194 L130 225 M230 194 L290 225 M115 259 V285"/>
+  <path class="wire" d="M195 308 C 20 300 10 70 152 57" style="stroke:var(--bad);stroke-dasharray:5 4" marker-end="url(#pd)"/>
+  <text x="10" y="180" font-size="11.5" style="fill:var(--bad)" transform="rotate(-90 14 180)">setUser sale…</text>
+  <path class="wire" d="M278 62 C 330 62 330 175 278 177" style="stroke:var(--bad);stroke-dasharray:5 4" marker-end="url(#pd)"/>
+  <text x="335" y="120" font-size="11.5" style="fill:var(--bad)">…user scende</text>
+  <text x="335" y="136" font-size="11.5" style="fill:var(--bad)">attraverso Routes</text>
+
+  <line x1="450" y1="20" x2="450" y2="320" class="wire" style="stroke:var(--line)"/>
+
+  <text x="675" y="22" text-anchor="middle" font-weight="700" class="t-react">CON Context: un'antenna</text>
+  <g font-size="12.5" class="mono">
+    <rect class="box react" x="600" y="40" width="150" height="34" rx="7"/><text x="675" y="62" text-anchor="middle">UserProvider ★</text>
+    <rect class="box" x="615" y="100" width="120" height="34" rx="7"/><text x="675" y="122" text-anchor="middle">App · Routes</text>
+    <rect class="box react" x="615" y="160" width="120" height="34" rx="7"/><text x="675" y="182" text-anchor="middle">Navigation</text>
+    <rect class="box" x="500" y="225" width="150" height="34" rx="7"/><text x="575" y="247" text-anchor="middle">Authentication</text>
+    <rect class="box react" x="500" y="285" width="150" height="34" rx="7"/><text x="575" y="307" text-anchor="middle">SignInForm</text>
+    <rect class="box" x="700" y="225" width="120" height="34" rx="7"/><text x="760" y="247" text-anchor="middle">Home</text>
+  </g>
+  <path class="wire" d="M675 74 V100 M675 134 V160 M660 194 L590 225 M690 194 L750 225 M575 259 V285"/>
+  <path class="wire flow" d="M752 57 C 860 60 860 170 737 177" style="stroke:var(--c-react)" marker-end="url(#pc)"/>
+  <path class="wire flow" d="M752 50 C 890 50 890 300 652 302" style="stroke:var(--c-react)" marker-end="url(#pc)"/>
+  <text x="790" y="110" font-size="11.5" class="t-react">useContext</text>
+  <text x="790" y="125" font-size="11.5" class="t-react">legge diretto</text>
+</svg>
+</div>
+<p>Senza Context, lo state dovrebbe stare nel primo antenato comune (<code>App</code>) e scendere come prop attraverso componenti che <b>non lo usano</b>, come <code>Routes</code> e <code>Authentication</code>. Questo è il <dfn data-term="propdrilling">prop drilling</dfn>. Con React Router è ancora peggio: le route ricevono <code>element={&lt;Authentication /&gt;}</code> e passare props attraverso <code>&lt;Outlet /&gt;</code> è scomodo.</p>
+<div class="callout"><span class="title">Cosa risolve il Context, e cosa no</span>
+Il Context risolve il <b>trasporto</b>: chiunque sotto il Provider legge il valore senza intermediari. <b>Non</b> è un sistema di stato: lo state continua a vivere in un normale <code>useState</code>, dentro il componente Provider. Il Context è il <b>cavo</b>, non la <b>batteria</b>.</div>
+
+<!-- ================================================================== -->
+<h2 id="teoria"><span class="section-num">2</span>Teoria e terminologia</h2>
+<h3>I tre pezzi</h3>
+<div class="table-wrap"><table>
+<tr><th>Pezzo</th><th>Codice</th><th>Cosa fa</th></tr>
+<tr><td><b>Creazione</b></td><td><code>const UserContext = createContext(defaultValue)</code></td><td>Crea l'<b>oggetto context</b>, una specie di "canale". Si fa <b>una volta</b>, a livello di modulo, fuori dai componenti. L'oggetto in sé <b>non contiene dati</b>.</td></tr>
+<tr><td><b>Fornitura</b></td><td><code>&lt;UserContext.Provider value={value}&gt;</code></td><td>Dice: "per tutti i componenti qui sotto, il valore di questo canale è <code>value</code>". Questo è il <dfn data-term="provider">Provider</dfn>.</td></tr>
+<tr><td><b>Lettura</b></td><td><code>const value = useContext(UserContext)</code></td><td>Restituisce il <code>value</code> del Provider <b>più vicino sopra</b>. In più, <b>iscrive</b> il componente: quando quel value cambia, il componente fa re-render. Chi lo chiama è un <dfn data-term="consumer">consumer</dfn>.</td></tr>
+</table></div>
+
+<h3>Il valore di default: l'ultima spiaggia</h3>
+<p><code>defaultValue</code> viene usato <b>solo</b> quando non c'è nessun Provider sopra il componente che legge. Non è il valore iniziale dello state, che invece è <code>useState(null)</code> dentro il Provider. Nel corso:</p>
+<pre class="code">export const UserContext = createContext({
+  setCurrentUser: () => null,   // funzione "finta": non fa niente
+  currentUser: null,
+});</pre>
+<p>Dichiarare la <b>forma</b> del valore (le stesse chiavi del vero <code>value</code>) serve a due cose: documenta cosa offre il context, e fa sì che un componente fuori dal Provider non vada in crash. Il prezzo è che <b>fallisce in silenzio</b>: <code>setCurrentUser(user)</code> non fa niente e non dà nessun errore. Ci torniamo negli errori tipici.</p>
+
+<h3>La regola dei re-render</h3>
+<ol>
+  <li>Il componente Provider (<code>UserProvider</code>) ha uno state. Quando lo state cambia, il Provider fa <b>re-render</b>.</li>
+  <li>A ogni render del Provider, <code>const value = { currentUser, setCurrentUser }</code> crea un <b>nuovo oggetto</b>.</li>
+  <li>React confronta il value vecchio con quello nuovo usando <code>Object.is</code>, cioè per <b>riferimento</b>. È un oggetto nuovo, quindi è "cambiato".</li>
+  <li><b>Tutti i consumer</b> di quel context fanno re-render, e con loro i figli che disegnano direttamente.</li>
+  <li>I componenti che <b>non</b> leggono il context e che arrivano come <code>children</code> dall'esterno <b>non</b> fanno re-render.</li>
+</ol>
+<div class="callout warn"><span class="title">Il punto 5 è sottile ma importantissimo</span>
+<code>UserProvider</code> riceve <code>&lt;App /&gt;</code> come <code>children</code>. L'elemento <code>&lt;App /&gt;</code> è stato creato in <code>index.js</code>, non dentro <code>UserProvider</code>. Quando <code>UserProvider</code> fa re-render, restituisce <b>lo stesso identico elemento</b> <code>children</code>, e React lo salta. È per questo che il pattern <code>({ children }) =&gt; &lt;Ctx.Provider&gt;{children}&lt;/Ctx.Provider&gt;</code> è efficiente: fa re-render solo chi legge davvero.</div>
+
+<h3>useEffect e il listener di Firebase</h3>
+<p><code>onAuthStateChanged</code> è un <dfn data-term="observer">observer</dfn>: invece di chiedere "chi è loggato?" una volta, ti <b>iscrivi</b> e Firebase ti avvisa <b>ogni volta</b> che lo stato cambia (login, logout, sessione ripristinata al refresh). Un'iscrizione si fa una volta e va <b>chiusa</b> quando non serve più:</p>
+<pre class="code">useEffect(() => {
+  const unsubscribe = onAuthStateChangedListener(callback);  // iscriviti
+  return unsubscribe;                                        // cleanup: disiscriviti
+}, []);                                                      // [] = solo al montaggio</pre>
+<ul>
+  <li><b>Perché useEffect?</b> Iscriversi è un <i>effetto collaterale</i>, cioè parla con il mondo esterno. Se lo facessi nel corpo del componente, ti iscriveresti a <b>ogni render</b>.</li>
+  <li><b>Perché <code>[]</code>?</b> L'array delle dipendenze vuoto vuol dire "esegui dopo il primo render e mai più".</li>
+  <li><b>Perché <code>return unsubscribe</code>?</b> La funzione restituita da un effect è il <dfn data-term="cleanup">cleanup</dfn>: React la chiama quando il componente viene smontato. Senza cleanup il listener resta vivo e chiama <code>setCurrentUser</code> su un componente che non esiste più.</li>
+</ul>
+<div class="callout"><span class="title">StrictMode e la tua versione di React</span>
+Il tuo <code>index.js</code> usa <code>&lt;React.StrictMode&gt;</code> con <b>React 17.0.2</b>. In React 17, StrictMode (solo in sviluppo) esegue <b>due volte il corpo dei componenti</b> per scovare effetti collaterali nel render, ma <b>non</b> gli effect. Da React 18 in poi, StrictMode esegue anche gli effect due volte (montaggio → cleanup → montaggio), apposta per verificare che il tuo cleanup funzioni. Se un giorno aggiorni React e vedi due iscrizioni nei log, è questo: con un cleanup corretto non succede niente di male.</div>
+
+<!-- ================================================================== -->
+<h2 id="modello"><span class="section-num">3</span>Modello mentale: la stazione radio</h2>
+<div class="card analogy"><div class="icon">📻</div><div>
+<b><code>createContext</code></b> sceglie una <b>frequenza</b> (per esempio 101.5 FM, "UserContext"). Da sola la frequenza non trasmette niente.<br>
+<b>Il Provider</b> è un'<b>antenna</b> che trasmette su quella frequenza il suo <code>value</code> in quel momento. Copre solo il territorio sotto di sé.<br>
+<b><code>useContext</code></b> è una <b>radio sintonizzata</b> su quella frequenza: sente l'antenna più vicina sopra di lei. E quando l'antenna cambia trasmissione, la radio si <b>riaccende</b> (re-render).<br>
+<b>Il default</b> è il fruscio che senti se sei fuori da ogni copertura.<br>
+<b>Chi non ha la radio</b> (non chiama useContext) non sente niente e non viene disturbato.
+</div></div>
+
+<div class="card">
+<svg class="diagram" viewBox="0 0 900 300" role="img" aria-label="Albero dei componenti con i provider del corso">
+  <g font-size="12.5" class="mono">
+    <rect class="box" x="20" y="20" width="160" height="34" rx="7"/><text x="100" y="42" text-anchor="middle">React.StrictMode</text>
+    <rect class="box" x="60" y="66" width="160" height="34" rx="7"/><text x="140" y="88" text-anchor="middle">BrowserRouter</text>
+    <rect class="box react" x="100" y="112" width="160" height="34" rx="7"/><text x="180" y="134" text-anchor="middle">📡 UserProvider</text>
+    <rect class="box auth" x="140" y="158" width="170" height="34" rx="7"/><text x="225" y="180" text-anchor="middle">📡 ProductsProvider</text>
+    <rect class="box fs" x="180" y="204" width="150" height="34" rx="7"/><text x="255" y="226" text-anchor="middle">📡 CartProvider</text>
+    <rect class="box" x="220" y="250" width="100" height="34" rx="7"/><text x="270" y="272" text-anchor="middle">App</text>
+  </g>
+  <path class="wire" d="M40 54 V83 H60 M80 100 V129 H100 M120 146 V175 H140 M160 192 V221 H180 M200 238 V267 H220"/>
+  <g font-size="13">
+    <text x="400" y="60" font-weight="700">Cosa sente ogni componente sotto App?</text>
+    <text x="400" y="90" class="t-react">● user — tutti (UserProvider copre tutto)</text>
+    <text x="400" y="114" class="t-auth">● products — tutti (incluso CartProvider)</text>
+    <text x="400" y="138" class="t-fs">● cart — solo ciò che sta sotto CartProvider</text>
+    <text x="400" y="176" class="muted">L'ordine conta solo se un Provider USA un altro context:</text>
+    <text x="400" y="198" class="muted">CartProvider potrebbe leggere UserContext (sta sotto),</text>
+    <text x="400" y="220" class="muted">UserProvider NON potrebbe leggere CartContext (sta sopra).</text>
+    <text x="400" y="258">BrowserRouter sta sopra i Provider: anche loro</text>
+    <text x="400" y="280">possono usare useNavigate, se servisse.</text>
+  </g>
+</svg>
+</div>
+
+<!-- ================================================================== -->
+<h2 id="flusso"><span class="section-num">4</span>Flusso animato: UserContext + listener (lezione 11)</h2>
+<p>Tre momenti nella vita dell'app. Guarda soprattutto il pannello dati: lo <b>state</b> del Provider, il <b>value</b> trasmesso e chi fa <b>re-render</b>.</p>
+
+<template id="svg-ctx">
+<svg class="diagram" viewBox="0 0 900 340" role="img" aria-label="UserProvider, listener di Firebase e consumer">
+  <defs>
+    <marker id="x-r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" style="fill:var(--c-react)"/></marker>
+    <marker id="x-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" style="fill:var(--c-auth)"/></marker>
+    <marker id="x-f" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" style="fill:var(--c-fs)"/></marker>
+  </defs>
+  <g data-node="prov">
+    <rect class="box react" x="250" y="25" width="215" height="115" rx="10"/>
+    <text x="358" y="48" text-anchor="middle" font-weight="700" class="t-react">UserProvider</text>
+    <text x="265" y="72" font-size="12" class="mono">state: currentUser</text>
+    <text x="265" y="94" font-size="12" class="mono">useEffect(…, [])</text>
+    <text x="265" y="116" font-size="12" class="mono">value = {currentUser, set…}</text>
+  </g>
+  <g data-node="ctx">
+    <rect x="250" y="160" width="215" height="44" rx="22" style="fill:none;stroke:var(--c-react);stroke-width:2;stroke-dasharray:6 4"/>
+    <text x="358" y="187" text-anchor="middle" font-size="12.5" class="mono t-react">📡 UserContext.Provider</text>
+  </g>
+  <path data-node="ctx" class="wire wire-react" d="M358 140 V158"/>
+  <g data-node="app">
+    <rect class="box" x="30" y="160" width="170" height="44" rx="8"/>
+    <text x="115" y="180" text-anchor="middle" font-size="12" class="mono">App · Routes</text>
+    <text x="115" y="196" text-anchor="middle" font-size="10.5" class="muted">children: NON legge il context</text>
+  </g>
+  <g data-node="nav">
+    <rect class="box react" x="30" y="250" width="180" height="70" rx="10"/>
+    <text x="120" y="276" text-anchor="middle" font-weight="700" class="t-react">Navigation</text>
+    <text x="120" y="298" text-anchor="middle" font-size="11.5" class="mono">useContext(UserContext)</text>
+  </g>
+  <g data-node="signin">
+    <rect class="box" x="255" y="250" width="200" height="70" rx="10"/>
+    <text x="355" y="276" text-anchor="middle" font-weight="700">SignInForm</text>
+    <text x="355" y="298" text-anchor="middle" font-size="11.5" class="mono muted">(v2: non legge il context)</text>
+  </g>
+  <g data-node="sdk">
+    <rect class="box auth" x="510" y="25" width="200" height="80" rx="10"/>
+    <text x="610" y="50" text-anchor="middle" font-size="12.5" font-weight="700" class="t-auth">SDK Auth</text>
+    <text x="610" y="72" text-anchor="middle" font-size="11.5" class="mono">onAuthStateChanged</text>
+    <text x="610" y="92" text-anchor="middle" font-size="11" class="muted">tiene la lista dei listener</text>
+  </g>
+  <g data-node="auth"><rect class="box auth" x="745" y="25" width="140" height="80" rx="10"/><text x="815" y="62" text-anchor="middle" font-weight="700" class="t-auth">🔐 Auth</text><text x="815" y="82" text-anchor="middle" font-size="11" class="muted">server + sessione</text></g>
+  <g data-node="utils"><rect class="box fs" x="510" y="250" width="200" height="70" rx="10"/><text x="610" y="278" text-anchor="middle" font-size="11.5" class="mono">createUserDocument</text><text x="610" y="296" text-anchor="middle" font-size="11.5" class="mono">FromAuth(user)</text></g>
+  <g data-node="fs"><rect class="box fs" x="745" y="250" width="140" height="70" rx="10"/><text x="815" y="290" text-anchor="middle" font-weight="700" class="t-fs">🗄️ Firestore</text></g>
+
+  <path data-node="w-sub" data-flow class="wire wire-auth" d="M465 55 H508" marker-end="url(#x-a)"/>
+  <text data-node="w-sub" x="468" y="48" font-size="10.5" class="t-auth">iscriviti</text>
+  <path data-node="w-auth" data-flow class="wire wire-auth" d="M710 65 H743" marker-end="url(#x-a)"/>
+  <path data-node="w-cb" data-flow class="wire wire-auth" d="M610 105 V125 H467" marker-end="url(#x-a)"/>
+  <text data-node="w-cb" x="480" y="140" font-size="10.5" class="t-auth">callback(user)</text>
+  <path data-node="w-doc" data-flow class="wire wire-fs" d="M465 130 C 560 150 610 200 610 248" marker-end="url(#x-f)"/>
+  <path data-node="w-fs" data-flow class="wire wire-fs" d="M710 285 H743" marker-end="url(#x-f)"/>
+  <path data-node="w-bcast" data-flow class="wire wire-react" d="M250 190 C 200 215 140 225 125 248" marker-end="url(#x-r)"/>
+  <text data-node="w-bcast" x="140" y="232" font-size="10.5" class="t-react">nuovo value</text>
+  <path data-node="w-login" data-flow class="wire wire-auth" d="M455 262 C 500 220 540 140 560 107" marker-end="url(#x-a)"/>
+  <text data-node="w-login" x="470" y="228" font-size="10.5" class="t-auth">popup</text>
+  <path data-node="w-signout" data-flow class="wire wire-auth" d="M40 248 V12 H560 V23" marker-end="url(#x-a)"/>
+  <text data-node="w-signout" x="70" y="9" font-size="10.5" class="t-auth">signOutUser()</text>
+</svg>
+</template>
+
+<pre class="code" id="code-ctx" hidden>// user.context.jsx (lezione 11)
+export const UserContext = createContext({
+  setCurrentUser: () => null,
+  currentUser: null,
+});
+
+export const UserProvider = ({ children }) => {
+  const [currentUser, setCurrentUser] = useState(null);
+  const value = { currentUser, setCurrentUser };
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChangedListener((user) => {
+      if (user) {
+        createUserDocumentFromAuth(user);
+      }
+      setCurrentUser(user);
+    });
+
+    return unsubscribe;
+  }, []);
+
+  return &lt;UserContext.Provider value={value}>{children}&lt;/UserContext.Provider>;
+};
+
+// firebase.utils.js
+export const onAuthStateChangedListener = (callback) =>
+  onAuthStateChanged(auth, callback);
+
+export const signOutUser = async () => await signOut(auth);
+
+// navigation.component.jsx
+const { currentUser } = useContext(UserContext);
+// ...
+{currentUser ? (
+  &lt;span className='nav-link' onClick={signOutUser}>SIGN OUT&lt;/span>
+) : (
+  &lt;Link className='nav-link' to='/auth'>SIGN IN&lt;/Link>
+)}
+
+// sign-in-form.component.jsx
+const signInWithGoogle = async () => {
+  await signInWithGooglePopup();
+};</pre>
+
+<div id="flow"></div>
+
+<!-- ================================================================== -->
+<h2 id="dati"><span class="section-num">5</span>Forma dei dati</h2>
+<div class="grid-2">
+  <div class="card"><b>UserContext</b> (l'oggetto creato da <code>createContext</code>, semplificato)<div id="insp-ctx" style="margin-top:8px"></div></div>
+  <div class="card"><b>value</b> trasmesso dal Provider dopo il login<div id="insp-value" style="margin-top:8px"></div></div>
+  <div class="card"><b>Cosa restituisce useContext</b> in un componente <b>fuori</b> dal Provider<div id="insp-default" style="margin-top:8px"></div></div>
+  <div class="card"><b>Il valore di ritorno di onAuthStateChanged</b><div id="insp-unsub" style="margin-top:8px"></div></div>
+</div>
+<div class="callout"><span class="title">Due render, due oggetti diversi</span>
+<code>render 1: value = { currentUser: null, setCurrentUser: ƒ }</code><br>
+<code>render 2: value = { currentUser: null, setCurrentUser: ƒ }</code><br>
+Il <b>contenuto</b> è identico, ma <code>render1.value === render2.value</code> è <code>false</code>: sono due oggetti creati in due momenti diversi. React confronta i riferimenti, non il contenuto. <code>setCurrentUser</code> invece è <b>lo stesso</b> riferimento in ogni render: React garantisce che la funzione setter di useState sia stabile.</div>
+
+<!-- ================================================================== -->
+<h2 id="codice"><span class="section-num">6</span>Nel codice del corso: due versioni a confronto</h2>
+<p>Il corso costruisce UserContext in due passi. Capire <b>perché</b> si passa dalla v1 alla v2 è più importante del codice stesso.</p>
+<div class="grid-2">
+<div>
+<p><b>v1 · lezione 10</b>: i componenti aggiornano il context a mano</p>
+<pre class="code">// sign-in-form
+const { setCurrentUser } = useContext(UserContext);
+
+const signInWithGoogle = async () => {
+  const { user } = await signInWithGooglePopup();
+  setCurrentUser(user);
+};
+
+// navigation
+const signOutHandler = async () => {
+  await signOutUser();
+  setCurrentUser(null);
+};</pre>
+</div>
+<div>
+<p><b>v2 · lezione 11</b>: un unico listener nel Provider</p>
+<pre class="code">// user.context
+useEffect(() => {
+  const unsubscribe = onAuthStateChangedListener((user) => {
+    if (user) createUserDocumentFromAuth(user);
+    setCurrentUser(user);
+  });
+  return unsubscribe;
+}, []);
+
+// sign-in-form: nessun setCurrentUser
+await signInWithGooglePopup();</pre>
+</div>
+</div>
+<div class="table-wrap"><table>
+<tr><th>Problema della v1</th><th>Come lo risolve la v2</th></tr>
+<tr><td>Ogni punto che cambia l'utente (Google, email, sign-up, sign-out) deve ricordarsi di chiamare <code>setCurrentUser</code>. Se ne dimentichi uno, UI e realtà divergono.</td><td>C'è <b>una sola fonte di verità</b>: Firebase. Il Provider ascolta e si allinea, qualunque sia il modo in cui l'utente è entrato o uscito.</td></tr>
+<tr><td>Al <b>refresh</b> della pagina <code>currentUser</code> torna <code>null</code>, anche se Firebase ha ancora la sessione salvata. Risultato: un "SIGN IN" falso.</td><td>Al montaggio, il listener riceve subito l'utente della sessione ripristinata.</td></tr>
+<tr><td>Ogni componente deve importare il context solo per scriverci.</td><td>I form non conoscono più il context: fanno login e basta. Meno dipendenze.</td></tr>
+<tr><td><code>createUserDocumentFromAuth</code> viene chiamata in più punti.</td><td>Viene chiamata in un posto solo, a ogni login. È idempotente (M3), quindi è sicuro.</td></tr>
+</table></div>
+
+<h3>Il file completo, annotato</h3>
+<div class="annot">
+<pre class="code">import { createContext, useState, useEffect } from 'react';
+
+import {
+  onAuthStateChangedListener,
+  createUserDocumentFromAuth,
+} from '../utils/firebase/firebase.utils';
+
+export const UserContext = createContext({
+  setCurrentUser: () => null,
+  currentUser: null,
+});
+
+export const UserProvider = ({ children }) => {
+  const [currentUser, setCurrentUser] = useState(null);
+  const value = { currentUser, setCurrentUser };
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChangedListener((user) => {
+      if (user) {
+        createUserDocumentFromAuth(user);
+      }
+      setCurrentUser(user);
+    });
+
+    return unsubscribe;
+  }, []);
+
+  return &lt;UserContext.Provider value={value}>{children}&lt;/UserContext.Provider>;
+};</pre>
+<ol>
+  <li data-lines="3-6"><b>Il context importa le funzioni di utils</b>, non l'SDK: la separazione dei livelli (M3 ⑦) resta intatta.</li>
+  <li data-lines="8-11"><b>Creazione a livello di modulo</b>: l'oggetto viene creato <b>una volta</b>, quando il file viene importato. Se lo creassi dentro un componente, ogni render produrrebbe un context diverso e nessuno si sintonizzerebbe.</li>
+  <li data-lines="13"><b>Destructuring delle props</b>: <code>children</code> è tutto quello che metti tra <code>&lt;UserProvider&gt;</code> e <code>&lt;/UserProvider&gt;</code>.</li>
+  <li data-lines="14"><b>La batteria</b>: lo state vero. <code>null</code> = "nessuno loggato" (o "non lo so ancora": vedi le domande da dev).</li>
+  <li data-lines="15"><b>Nuovo oggetto a ogni render.</b> Ok per questa app; nella sezione ⑧ vedi come la doc lo ottimizza.</li>
+  <li data-lines="17-26"><b>Effetto con cleanup</b>: iscrizione al primo render, disiscrizione allo smontaggio.</li>
+  <li data-lines="19-21"><b>Fire-and-forget</b>: nessun <code>await</code>. La scrittura in Firestore parte, ma <code>setCurrentUser</code> non la aspetta: la UI si aggiorna subito.</li>
+  <li data-lines="22"><b>Fuori dall'if</b>: viene chiamata sia con un utente sia con <code>null</code> (logout).</li>
+  <li data-lines="25"><b>Restituisce la funzione</b>, non la chiama: <code>return unsubscribe</code>, non <code>return unsubscribe()</code>.</li>
+  <li data-lines="28"><b>Sintassi React 17</b>: <code>.Provider</code>. Il value è quello che ricevono i consumer.</li>
+</ol>
+</div>
+
+<h3>Lo stesso schema, altri dati: Products e Cart</h3>
+<div class="grid-2">
+<div><p><b>ProductsContext</b> (lezione 12): lo stato più semplice possibile</p>
+<pre class="code">export const ProductsContext = createContext({
+  products: [],
+});
+
+export const ProductsProvider = ({ children }) => {
+  const [products, setProducts] = useState(PRODUCTS);
+  const value = { products };
+  return (
+    &lt;ProductsContext.Provider value={value}>
+      {children}
+    &lt;/ProductsContext.Provider>
+  );
+};</pre></div>
+<div><p><b>CartContext</b> (lezioni 13–16): stato e <b>azioni</b></p>
+<pre class="code">const addCartItem = (cartItems, productToAdd) => {
+  const existingCartItem = cartItems.find(
+    (cartItem) => cartItem.id === productToAdd.id
+  );
+  if (existingCartItem) {
+    return cartItems.map((cartItem) =>
+      cartItem.id === productToAdd.id
+        ? { ...cartItem, quantity: cartItem.quantity + 1 }
+        : cartItem
+    );
+  }
+  return [...cartItems, { ...productToAdd, quantity: 1 }];
+};
+
+// nel Provider:
+const addItemToCart = (productToAdd) =>
+  setCartItems(addCartItem(cartItems, productToAdd));</pre></div>
+</div>
+<div class="callout"><span class="title">Il pattern da riconoscere</span>
+La logica (<code>addCartItem</code>) è una <b>funzione pura</b> fuori dal componente: riceve l'array vecchio e ne <b>restituisce uno nuovo</b>, senza modificarlo. Il Provider espone solo l'<b>azione</b> (<code>addItemToCart</code>), e i componenti non sanno com'è fatto l'array. È lo stesso principio di <code>firebase.utils.js</code>: chi usa non deve sapere come funziona dentro.</div>
+
+<!-- ================================================================== -->
+<h2 id="componenti"><span class="section-num">7</span>Nei componenti: simulatore di re-render</h2>
+<p>Questo è l'albero dell'app come sarà alla fine del modulo Context del corso. Clicca un evento e guarda chi si accende. Prima di cliccare, <b>prevedi</b>: quali componenti faranno re-render?</p>
+<div class="legend">
+  <span><i style="border-color:var(--warn);background:var(--warn-soft)"></i>proprietario dello state</span>
+  <span><i style="border-color:var(--c-react);background:var(--c-react-soft)"></i>consumer: legge il context cambiato</span>
+  <span><i style="border-color:var(--c-fs);background:var(--c-fs-soft)"></i>a cascata: figlio disegnato da chi fa re-render</span>
+  <span><i style="border-color:var(--line)"></i>niente re-render</span>
+</div>
+<div class="card">
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+    <button class="btn" data-ev="user">👤 Login / logout (currentUser)</button>
+    <button class="btn" data-ev="open">🛍️ Apri il carrello (isCartOpen)</button>
+    <button class="btn" data-ev="add">➕ Aggiungi un prodotto (cartItems)</button>
+    <button class="btn" data-ev="reset">↺ Pulisci</button>
+  </div>
+  <div class="sim" id="sim"></div>
+  <div id="sim-note" class="callout" style="margin-bottom:0">Scegli un evento.</div>
+</div>
+
+<!-- ================================================================== -->
+<h2 id="documentazione"><span class="section-num">8</span>Documentazione ufficiale ↔ corso</h2>
+
+<h3>React: createContext e useContext</h3>
+<p>Le pagine di riferimento sono <a href="https://react.dev/reference/react/createContext" target="_blank" rel="noopener">react.dev › createContext</a> e <a href="https://react.dev/reference/react/useContext" target="_blank" rel="noopener">react.dev › useContext</a>. Sono pagine di <b>Reference</b> (T1 ②): le leggi con Syntax → Returns → Caveats.</p>
+<div class="table-wrap"><table>
+<tr><th>La doc dice (riassunto)</th><th>Cosa vuol dire per il tuo codice</th></tr>
+<tr><td><b>createContext › Returns</b>: l'oggetto context "does not hold any information". Rappresenta <i>quale</i> context si legge o si fornisce.</td><td>Il canale non è il dato. Il dato sta nello <code>useState</code> del Provider.</td></tr>
+<tr><td><b>defaultValue</b>: è il valore usato quando non c'è nessun Provider sopra. È un fallback di "ultima spiaggia", statico, che non cambia mai.</td><td>Non è lo stato iniziale. <code>setCurrentUser: () =&gt; null</code> del default non aggiornerà mai niente.</td></tr>
+<tr><td><b>useContext › Returns</b>: il <code>value</code> del Provider più vicino sopra; se non c'è, il defaultValue. React fa re-render dei componenti che leggono un context quando questo cambia.</td><td>È il meccanismo di iscrizione che hai visto nel simulatore.</td></tr>
+<tr><td><b>Caveat 1</b>: <code>useContext()</code> non vede i Provider restituiti dallo <b>stesso</b> componente; il Provider deve stare <b>sopra</b>.</td><td>Dentro <code>UserProvider</code> non puoi fare <code>useContext(UserContext)</code> e aspettarti il value che lui stesso fornisce.</td></tr>
+<tr><td><b>Caveat 2</b>: re-render di tutti i figli che usano il context, a partire dal Provider che riceve un <code>value</code> diverso; il confronto usa <code>Object.is</code>; <code>memo</code> non impedisce di ricevere il valore nuovo.</td><td>Un nuovo oggetto <code>value</code> a ogni render del Provider vuol dire che tutti i consumer fanno re-render.</td></tr>
+</table></div>
+
+<div class="callout bad"><span class="title">Attenzione alla versione: la doc è più avanti di te</span>
+<p style="margin:0 0 8px">react.dev documenta <b>React 19</b>. Lì il Provider si scrive <code>&lt;SomeContext value={…}&gt;</code>, e la doc dice che <code>SomeContext.Provider</code> è il modo "legacy", quello usato prima di React 19. Tu hai <b>React 17.0.2</b> (controlla <code>package.json</code>): devi usare <code>&lt;SomeContext.Provider value={…}&gt;</code>. Se copi la forma nuova in React 17, il context non funziona.</p>
+<span>Regola da T1: <b>prima di copiare, controlla la versione</b>, sia della libreria (package.json) sia della doc (react.dev = ultima versione).</span></div>
+
+<h3>Ottimizzare il value: lo snippet della doc tradotto per React 17</h3>
+<div class="grid-2">
+<div><p><span class="pill react">DOC</span> useContext › Optimizing re-renders</p>
+<pre class="code">function MyApp() {
+  const [currentUser, setCurrentUser] = useState(null);
+
+  const login = useCallback((response) => {
+    storeCredentials(response.credentials);
+    setCurrentUser(response.user);
+  }, []);
+
+  const contextValue = useMemo(() => ({
+    currentUser,
+    login
+  }), [currentUser, login]);
+
+  return (
+    &lt;AuthContext value={contextValue}>
+      &lt;Page />
+    &lt;/AuthContext>
+  );
+}</pre></div>
+<div><p><span class="pill react">TRADOTTO</span> sul tuo UserProvider, React 17</p>
+<pre class="code">export const UserProvider = ({ children }) => {
+  const [currentUser, setCurrentUser] = useState(null);
+
+  // stesso oggetto finché currentUser non cambia
+  const value = useMemo(
+    () => ({ currentUser, setCurrentUser }),
+    [currentUser]
+  );
+
+  // ...useEffect invariato
+
+  return (
+    &lt;UserContext.Provider value={value}>
+      {children}
+    &lt;/UserContext.Provider>
+  );
+};</pre></div>
+</div>
+<p>Tabella di traduzione: <code>AuthContext</code> → <code>UserContext</code>; <code>&lt;AuthContext value&gt;</code> → <code>&lt;UserContext.Provider value&gt;</code> (versione!); <code>login</code> con <code>useCallback</code> → non serve, perché <code>setCurrentUser</code> è già stabile; <code>&lt;Page /&gt;</code> → <code>{children}</code>. <b>Ti serve davvero?</b> Nel corso no: <code>UserProvider</code> fa re-render solo quando cambia lo state, e in quel caso il value <i>deve</i> cambiare comunque. <code>useMemo</code> conta quando il Provider fa re-render <b>per altri motivi</b>, per esempio quando il suo genitore fa re-render.</p>
+
+<h3>Firebase: onAuthStateChanged</h3>
+<div class="grid-2">
+<div><p><span class="pill auth">DOC</span> <a href="https://firebase.google.com/docs/auth/web/manage-users" target="_blank" rel="noopener">Manage users › Get the currently signed-in user</a></p>
+<pre class="code">import { getAuth, onAuthStateChanged } from "firebase/auth";
+
+const auth = getAuth();
+onAuthStateChanged(auth, (user) => {
+  if (user) {
+    // User is signed in, see docs for a list of available properties
+    // https://firebase.google.com/docs/reference/js/auth.user
+    const uid = user.uid;
+    // ...
+  } else {
+    // User is signed out
+    // ...
+  }
+});</pre></div>
+<div><p><span class="pill react">CORSO</span></p>
+<pre class="code">// firebase.utils.js
+export const onAuthStateChangedListener = (callback) =>
+  onAuthStateChanged(auth, callback);
+
+// user.context.jsx
+const unsubscribe = onAuthStateChangedListener((user) => {
+  if (user) {
+    createUserDocumentFromAuth(user);
+  }
+  setCurrentUser(user);
+});</pre></div>
+</div>
+<p style="font-size:13px;color:var(--muted)">Snippet di Firebase (Google), licenza Apache 2.0.</p>
+<ul>
+  <li><b>Lo snippet ignora il valore di ritorno.</b> La reference però dice che <code>onAuthStateChanged</code> restituisce <code>Unsubscribe</code>, una funzione. In uno script si può ignorare; in un componente React che si monta e si smonta <b>no</b>: è proprio quello che <code>useEffect</code> deve restituire.</li>
+  <li><b>Il ramo <code>else</code></b> della doc (utente uscito) nel corso non c'è, perché <code>setCurrentUser(user)</code> sta fuori dall'if e gestisce entrambi i casi con una riga sola.</li>
+  <li><b>Firma della reference</b>: <code>onAuthStateChanged(auth, nextOrObserver, error?, completed?): Unsubscribe</code>. Leggendo i parametri scopri che <code>error</code> e <code>completed</code> sono <b>deprecati</b>: <i>"This callback is never triggered"</i>. Gli errori di login e logout si intercettano sulle Promise di <code>signIn…</code> e <code>signOut</code>. Senza la reference, potresti aspettarti errori che non arriveranno mai.</li>
+  <li><b>Perché un observer e non <code>auth.currentUser</code>?</b> La guida spiega che, usando l'observer, l'oggetto Auth non è in uno stato intermedio, come l'inizializzazione, quando leggi l'utente. Al caricamento della pagina, <code>auth.currentUser</code> può valere <code>null</code> solo perché Firebase non ha ancora finito di ripristinare la sessione.</li>
+</ul>
+
+<!-- ================================================================== -->
+<h2 id="errori"><span class="section-num">9</span>Errori tipici: dal modello sbagliato a quello giusto</h2>
+
+<div class="card"><h3 style="margin-top:0">❶ "useContext funziona ovunque"</h3>
+<pre class="code">// index.js dimenticato: &lt;App /> NON è dentro &lt;UserProvider>
+const { setCurrentUser } = useContext(UserContext);
+setCurrentUser(user);   // nessun errore… e nessun effetto</pre>
+<p><b>Passo per passo:</b> nessun Provider sopra → <code>useContext</code> restituisce il <b>default</b> → <code>setCurrentUser</code> è <code>() =&gt; null</code> → viene chiamata, restituisce null, fine. La Navigation non cambia mai, la console non dice niente.</p>
+<div class="grid-2"><div class="callout bad"><span class="title">Modello sbagliato</span>"Se importo il context, sono collegato."</div><div class="callout good"><span class="title">Modello giusto</span>"Sono collegato solo se un <b>Provider sta sopra di me nell'albero</b>. Importare il file non collega niente."</div></div>
+</div>
+
+<div class="card"><h3 style="margin-top:0">❷ "Modifico l'array dello state, tanto è lo stesso"</h3>
+<pre class="code">const addItemToCart = (product) => {
+  cartItems.push({ ...product, quantity: 1 });  // modifica l'array esistente
+  setCartItems(cartItems);                       // stesso riferimento!
+};</pre>
+<p><b>Passo per passo:</b> <code>push</code> modifica l'array che React ha già in memoria. <code>setCartItems(cartItems)</code> passa <b>lo stesso riferimento</b>, React fa <code>Object.is(vecchio, nuovo)</code> → <code>true</code> → "niente è cambiato" → <b>nessun re-render</b>. Il carrello contiene il prodotto, ma l'icona continua a mostrare 0.</p>
+<div class="grid-2"><div class="callout bad"><span class="title">Modello sbagliato</span>"React guarda il contenuto."</div><div class="callout good"><span class="title">Modello giusto</span>"React guarda il <b>riferimento</b>. Per dirgli 'è cambiato' gli do un <b>oggetto o array nuovo</b> (spread, map, filter)."</div></div>
+</div>
+
+<div class="card"><h3 style="margin-top:0">❸ "Il listener si chiude da solo"</h3>
+<pre class="code">useEffect(() => {
+  onAuthStateChangedListener((user) => setCurrentUser(user));
+}, []);   // manca: return unsubscribe</pre>
+<p>Oggi <code>UserProvider</code> vive per tutta la durata dell'app, quindi il danno non si vede. Ma lo stesso pattern dentro un componente che si monta e smonta (una pagina, un modale) accumula un listener in più a ogni montaggio. In React 18 con StrictMode lo vedresti subito: due listener attivi.</p>
+<div class="grid-2"><div class="callout bad"><span class="title">Modello sbagliato</span>"Quando il componente sparisce, sparisce tutto quello che ha creato."</div><div class="callout good"><span class="title">Modello giusto</span>"Sparisce solo ciò che appartiene a React. Le iscrizioni a sistemi esterni (Firebase, timer, eventi) vanno <b>chiuse a mano</b> nel cleanup."</div></div>
+</div>
+
+<div class="card"><h3 style="margin-top:0">❹ "Ogni dato che si calcola va messo nello state"</h3>
+<pre class="code">// corso, lezioni 15-16
+const [cartCount, setCartCount] = useState(0);
+useEffect(() => {
+  setCartCount(cartItems.reduce((total, item) => total + item.quantity, 0));
+}, [cartItems]);</pre>
+<p><b>Passo per passo:</b> <code>cartItems</code> cambia → render (con <code>cartCount</code> <b>ancora vecchio</b>!) → l'effect calcola → <code>setCartCount</code> → <b>secondo render</b> con il valore giusto. Due render invece di uno, e un istante in cui i due dati non sono coerenti tra loro.</p>
+<pre class="code">// alternativa: dato DERIVATO, calcolato durante il render
+const cartCount = cartItems.reduce((total, item) => total + item.quantity, 0);</pre>
+<div class="grid-2"><div class="callout bad"><span class="title">Modello sbagliato</span>"Tutto ciò che mostro deve essere state."</div><div class="callout good"><span class="title">Modello giusto</span>"Lo state è il <b>minimo indispensabile</b>. Ciò che si può calcolare da altro state è <dfn data-term="derived">derivato</dfn>: si calcola al volo. La doc di React ne parla nella pagina 'You Might Not Need an Effect'."</div></div>
+<p style="font-size:14px;color:var(--muted)">Il corso lo fa con useEffect per insegnarti useEffect. Non è un errore grave, ma un dev deve saper vedere l'alternativa.</p>
+</div>
+
+<div class="card"><h3 style="margin-top:0">❺ "Il default e il value si allineano da soli"</h3>
+<pre class="code">// default del CartContext (corso, lezione 16)
+removeItemFromCart: () => {},
+// value del CartProvider
+removeItemToCart,    // ← nome diverso!</pre>
+<p>Un componente che fa <code>const { removeItemFromCart } = useContext(CartContext)</code> riceve <b><code>undefined</code></b> dal Provider vero, perché quella chiave non esiste nel value. Al click: <code>TypeError: removeItemFromCart is not a function</code>. Il default non protegge, perché c'è un Provider sopra e quindi il default non viene usato.</p>
+<div class="grid-2"><div class="callout bad"><span class="title">Modello sbagliato</span>"Il default descrive cosa c'è nel context."</div><div class="callout good"><span class="title">Modello giusto</span>"Il default è solo un fallback. Ciò che i consumer ricevono è <b>esattamente</b> l'oggetto <code>value</code>, chiave per chiave."</div></div>
+</div>
+
+<!-- ================================================================== -->
+<h2 id="verifica"><span class="section-num">10</span>Verifica</h2>
+<div class="callout" id="score"></div>
+<div id="q1"></div><div id="q2"></div><div id="q3"></div><div id="q4"></div><div id="q5"></div>
+<h3>Domande da dev</h3>
+<p>Ragiona con valori concreti, riga per riga. Se non sei sicuro, rileggi il flusso animato <b>prima</b> di rispondere.</p>
+<div id="q6"></div><div id="q7"></div><div id="q8"></div><div id="q9"></div><div id="q10"></div><div id="q11"></div>
+
+<!-- ================================================================== -->
+<h2 id="esercizi"><span class="section-num">11</span>Esercizi</h2>
+<p>Da E3 in poi scrivi <b>componenti React veri</b> in file <code>.jsx</code>. L'autoverifica li monta in un DOM simulato con React 17 e Testing Library, le stesse librerie che il tuo progetto usa per i test.</p>
+<div id="ex-list"></div>
+
+<div class="footer-nav">
+  <a class="btn" href="m4-form.html">← M4 Form</a>
+  <a class="btn" href="m6-end-to-end.html">M6 End-to-end →</a>
+</div>
+</main>
+</div>
+<script src="../assets/manifest.js"></script>
+<script src="../assets/registro.js"></script>
+<script src="../assets/glossario.js"></script>
+<script src="../assets/app.js"></script>
+<script>
+const GUSER = { __type: 'UserImpl', uid: 'g7Hk2', displayName: 'Leandro L.', email: 'leo@mail.it' };
+const SET = 'ƒ setCurrentUser() — stabile';
+
+Lab.renderInspector(document.getElementById('insp-ctx'), { __type: 'Context object', Provider: { __type: 'componente' }, Consumer: { __type: 'componente (raro)' }, _currentValue: { __type: 'default (interno)', currentUser: null, setCurrentUser: 'ƒ () => null' } });
+Lab.renderInspector(document.getElementById('insp-value'), { __type: 'Object (nuovo a ogni render)', currentUser: GUSER, setCurrentUser: SET });
+Lab.renderInspector(document.getElementById('insp-default'), { __type: 'defaultValue', currentUser: null, setCurrentUser: 'ƒ () => null — non fa niente' });
+Lab.renderInspector(document.getElementById('insp-unsub'), { unsubscribe: 'ƒ unsubscribe() — chiamala per smettere di ascoltare' });
+
+const avvio = [
+  { title: 'Primo render: lo state parte da null', on: ['prov', 'ctx', 'app', 'nav'], lines: [[7, 9], 23], dataLabel: 'UserProvider · render 1',
+    text: '<p><code>useState(null)</code>: nessuno è loggato, <b>o meglio: React non lo sa ancora</b>. Il Provider trasmette <code>{ currentUser: null, … }</code>.</p><p>Navigation legge <code>null</code> e mostra <b>SIGN IN</b>. Anche se l\'utente aveva fatto login ieri: Firebase non ha ancora risposto.</p>',
+    data: { currentUser: null, value: { currentUser: null, setCurrentUser: SET }, 'Navigation mostra': 'SIGN IN' } },
+  { title: 'Dopo il render: parte l\'effect', on: ['prov', 'sdk'], hot: ['w-sub'], lines: [[11, 20]], dataLabel: 'Iscrizione',
+    text: '<p>Gli effect partono <b>dopo</b> che React ha disegnato. <code>onAuthStateChangedListener(callback)</code> registra la callback nella lista dei listener dell\'SDK e restituisce subito <code>unsubscribe</code>.</p><p>La callback <b>non</b> viene eseguita ora: viene <b>conservata</b> per dopo.</p>',
+    data: { unsubscribe: 'ƒ unsubscribe()', 'listener registrati': 1, 'callback eseguita?': false } },
+  { title: 'L\'SDK controlla la sessione salvata', on: ['sdk', 'auth'], hot: ['w-auth'], lines: [12], dataLabel: 'Persistenza',
+    text: '<p>Firebase guarda se nel browser c\'è una sessione salvata (in IndexedDB). In questo scenario no: l\'utente non ha mai fatto login.</p>',
+    data: { 'sessione salvata': false } },
+  { title: 'Prima chiamata della callback: null', on: ['sdk', 'prov'], hot: ['w-cb'], lines: [[12, 16]], dataLabel: 'Dentro la callback',
+    text: '<p>L\'SDK chiama la callback <b>una prima volta</b> con lo stato iniziale, anche se non è cambiato niente: <code>user = null</code>. <code>if (user)</code> è falso, quindi nessun documento.</p><p><code>setCurrentUser(null)</code>: il valore è <b>uguale</b> a quello attuale (<code>Object.is(null, null)</code>), quindi React <b>salta</b> il re-render.</p>',
+    data: { user: null, 'if (user)': false, 'setCurrentUser(null)': 'stesso valore → nessun re-render' } },
+];
+const login = [
+  { title: 'Click su "Sign in with Google"', on: ['signin', 'sdk', 'auth'], hot: ['w-login'], lines: [[41, 43]], dataLabel: 'SignInForm (v2)',
+    text: '<p>Il form chiama solo <code>signInWithGooglePopup()</code>. <b>Non tocca il context</b>: non sa nemmeno che esiste.</p>',
+    data: { 'SignInForm chiama setCurrentUser?': false } },
+  { title: 'Auth cambia stato → avvisa tutti i listener', on: ['auth', 'sdk', 'prov'], hot: ['w-cb'], lines: [12], dataLabel: 'Argomento della callback',
+    text: '<p>Il login riesce. L\'SDK aggiorna il suo stato interno e chiama <b>ogni</b> listener registrato, compresa la tua callback, passandole l\'utente.</p><p>Nota: questo succede <b>indipendentemente</b> da chi ha fatto il login e da come.</p>',
+    data: { user: GUSER } },
+  { title: 'Documento Firestore (senza aspettare)', on: ['prov', 'utils', 'fs'], hot: ['w-doc', 'w-fs'], lines: [[13, 15]], dataLabel: 'createUserDocumentFromAuth(user)',
+    text: '<p><code>if (user)</code> è vero, quindi parte <code>createUserDocumentFromAuth(user)</code>. <b>Senza await</b>: la callback non aspetta Firestore e passa subito alla riga successiva.</p>',
+    data: { chiamata: 'createUserDocumentFromAuth(user)', 'awaited?': false, ritorna: '⏳ Promise (ignorata)' } },
+  { title: 'setCurrentUser(user) → re-render del Provider', on: ['prov', 'ctx'], lines: [16, [7, 9]], dataLabel: 'UserProvider · render 2',
+    text: '<p>Lo state cambia (<code>null</code> → oggetto), quindi <code>UserProvider</code> fa re-render e crea un <b>nuovo</b> <code>value</code>.</p>',
+    data: { '~currentUser': GUSER, '~value': { __type: 'Object (nuovo)', currentUser: { __type: 'UserImpl', uid: 'g7Hk2' }, setCurrentUser: SET } } },
+  { title: 'Il nuovo value raggiunge i consumer', on: ['ctx', 'nav'], hot: ['w-bcast'], lines: [[32, 38]], dataLabel: 'Chi fa re-render',
+    text: '<p>React confronta il value nuovo con il vecchio: oggetti diversi. Ogni componente che ha chiamato <code>useContext(UserContext)</code> fa re-render.</p><p><b>App e Routes no</b>: sono <code>children</code> creati fuori. <b>SignInForm no</b>: nella v2 non legge il context. Navigation sì, e ora mostra <b>SIGN OUT</b>.</p>',
+    data: { 're-render': ['UserProvider', 'Navigation'], 'NON re-render': ['App', 'Routes', 'Authentication', 'SignInForm'], 'Navigation mostra': 'SIGN OUT' } },
+];
+const signout = [
+  { title: 'Click su SIGN OUT', on: ['nav', 'sdk', 'auth'], hot: ['w-signout'], lines: [35, 29], dataLabel: 'Navigation',
+    text: '<p><code>onClick={signOutUser}</code>: Navigation chiede il logout, e basta. Non chiama <code>setCurrentUser(null)</code>: ci penserà il listener.</p>',
+    data: { 'Navigation chiama setCurrentUser?': false } },
+  { title: 'Auth avvisa: user = null', on: ['sdk', 'prov'], hot: ['w-cb'], lines: [[12, 16]], dataLabel: 'Dentro la callback',
+    text: '<p>La callback riceve <code>null</code>. <code>if (user)</code> è falso, quindi nessuna scrittura. <code>setCurrentUser(null)</code>.</p>',
+    data: { user: null, 'if (user)': false } },
+  { title: 'Re-render: SIGN IN', on: ['prov', 'ctx', 'nav'], hot: ['w-bcast'], lines: [16, 34], dataLabel: 'Stato finale',
+    text: '<p>Lo state passa da oggetto a <code>null</code>: è cambiato, quindi c\'è un nuovo value e Navigation fa re-render mostrando <b>SIGN IN</b>.</p>',
+    data: { '~currentUser': null, 'Navigation mostra': 'SIGN IN' } },
+  { title: 'E se UserProvider venisse smontato?', on: ['prov', 'sdk'], lines: [19], dataLabel: 'Cleanup',
+    text: '<p>React chiamerebbe la funzione restituita dall\'effect, cioè <code>unsubscribe()</code>: la callback viene rimossa dalla lista dell\'SDK. Da quel momento i login e i logout non chiamerebbero più <code>setCurrentUser</code> su un componente che non esiste.</p>',
+    data: { 'unsubscribe()': 'chiamata da React', 'listener registrati': 0 } },
+];
+Lab.stepper('#flow', { title: 'UserContext nel tempo', svg: '#svg-ctx', code: '#code-ctx',
+  variants: { avvio: { label: 'Avvio app', steps: avvio }, login: { label: 'Login Google', steps: login }, out: { label: 'Sign out', steps: signout } } });
+
+/* ---------------- simulatore di re-render ---------------- */
+const TREE = { n: 'UserProvider', owns: 'user', kids: [
+  { n: 'ProductsProvider', owns: 'products', passed: true, kids: [
+    { n: 'CartProvider', owns: 'cart', passed: true, kids: [
+      { n: 'App', passed: true, kids: [
+        { n: 'Routes', kids: [
+          { n: 'Navigation', uses: ['user', 'cart:isCartOpen'], kids: [
+            { n: 'CartIcon', uses: ['cart:isCartOpen', 'cart:cartCount'] },
+            { n: 'CartDropdown', uses: ['cart:cartItems'], cond: 'solo se isCartOpen', kids: [{ n: 'CartItem ×n' }] },
+            { n: 'Outlet → pagina corrente', passed: true, kids: [
+              { n: 'Shop', uses: ['products'], passed: true, kids: [{ n: 'ProductCard ×n', uses: ['cart:addItemToCart'] }] },
+              { n: 'Authentication', passed: true, kids: [{ n: 'SignInForm' }, { n: 'SignUpForm' }] },
+            ] },
+          ] },
+        ] },
+      ] },
+    ] },
+  ] },
+] };
+const sim = document.getElementById('sim');
+function build(node, parent) {
+  const el = document.createElement('div');
+  el.className = 'node' + (node.passed ? ' passed' : '');
+  el._node = node;
+  el.innerHTML = `<div class="lbl"><b>${node.n}</b>${node.owns ? `<span class="uses">state: ${node.owns}</span>` : ''}${node.uses ? `<span class="uses">useContext → ${node.uses.join(', ')}</span>` : ''}${node.cond ? `<span class="uses">(${node.cond})</span>` : ''}</div>`;
+  parent.append(el);
+  (node.kids || []).forEach((k) => build(k, el));
+}
+build(TREE, sim);
+const NOTES = {
+  user: '<b>currentUser cambia.</b> Si accendono UserProvider (state) e Navigation (consumer). Navigation disegna direttamente CartIcon, quindi CartIcon fa re-render "a cascata" anche se non legge user. Gli altri Provider, App e la pagina corrente arrivano dall\'esterno (children / Outlet) e vengono saltati.',
+  open: '<b>isCartOpen cambia.</b> CartProvider crea un nuovo value: <b>tutti</b> i consumer di CartContext fanno re-render, anche ProductCard, che usa solo addItemToCart. Il value è un oggetto unico: React non sa quale chiave ti interessa. CartDropdown compare perché ora isCartOpen è true.',
+  add: '<b>cartItems cambia.</b> Stessa cosa: tutti i consumer di CartContext. Con la versione del corso (useEffect per cartCount) ci sono <b>due</b> render consecutivi: il primo con cartItems nuovo e cartCount vecchio, il secondo dopo setCartCount.',
+};
+function run(ev) {
+  const ctx = { user: 'user', open: 'cart', add: 'cart' }[ev];
+  sim.querySelectorAll('.node').forEach((el) => el.classList.remove('state', 'consumer', 'cascade', 'skip'));
+  if (ev === 'reset') { document.getElementById('sim-note').innerHTML = 'Scegli un evento.'; return; }
+  const walk = (el, cascading) => {
+    const nd = el._node;
+    let st = null;
+    if (nd.owns === ctx) st = 'state';
+    else if ((nd.uses || []).some((u) => u.split(':')[0] === ctx)) st = 'consumer';
+    else if (cascading && !nd.passed) st = 'cascade';
+    if (nd.cond && ev === 'user') st = null; // non è nemmeno disegnato (carrello chiuso)
+    el.classList.add(st || 'skip');
+    const nextCascade = st === 'consumer' || st === 'cascade';
+    [...el.children].filter((c) => c.classList.contains('node')).forEach((c) => walk(c, nextCascade));
+  };
+  walk(sim.firstElementChild, false);
+  document.getElementById('sim-note').innerHTML = NOTES[ev];
+}
+document.querySelectorAll('[data-ev]').forEach((b) => b.addEventListener('click', () => run(b.dataset.ev)));
+
+/* ---------------- quiz ---------------- */
+Lab.quiz('#q1', { id: 'm5-q1', question: 'Quando viene usato il <code>defaultValue</code> passato a <code>createContext</code>?',
+  options: [
+    { t: 'Come valore iniziale, finché lo state del Provider non viene aggiornato', why: '<span class="step">Il valore iniziale è quello di <code>useState(null)</code> dentro il Provider. Il default è un\'altra cosa e non si "sostituisce" con il tempo.</span>' },
+    { t: 'Solo quando il componente che chiama <code>useContext</code> non ha nessun Provider sopra di sé', ok: true, why: '<span class="step">È il "fruscio fuori copertura". Se c\'è un Provider sopra, il default non viene <b>mai</b> usato, neanche per un istante.</span>' },
+    { t: 'Quando il Provider passa <code>value={undefined}</code>', why: '<span class="step">Se il Provider passa <code>undefined</code>, i consumer ricevono <code>undefined</code>: un Provider c\'è, quindi il default non entra in gioco.</span>' },
+  ] });
+Lab.quiz('#q2', { id: 'm5-q2', question: '<code>setCurrentUser(user)</code> nel Provider. Quali componenti fanno re-render?',
+  options: [
+    { t: 'Tutto l\'albero sotto UserProvider', why: '<span class="step">Gli elementi passati come <code>children</code> sono stati creati fuori dal Provider: React li riconosce come identici e li salta. Rileggi il punto 5 della regola dei re-render.</span>' },
+    { t: 'UserProvider, i consumer di UserContext e i figli che questi disegnano direttamente', ok: true, why: '<span class="step">Lo state è nel Provider (re-render), il value è nuovo (i consumer fanno re-render), e i consumer disegnano i loro figli (cascata). Tutto il resto viene saltato.</span>' },
+    { t: 'Solo i consumer di UserContext', why: '<span class="step">Manca il Provider stesso, che è il proprietario dello state ed è il primo a fare re-render. Mancano anche i figli disegnati dai consumer.</span>' },
+  ] });
+Lab.quiz('#q3', { id: 'm5-q3', type: 'order', question: 'Ordina cosa succede dall\'apertura dell\'app al primo "SIGN OUT" visibile, per un utente con la sessione già salvata:',
+  items: ['render iniziale con currentUser = null', 'useEffect registra il listener', 'l\'SDK ripristina la sessione', 'la callback riceve user', 'setCurrentUser(user)', 'Navigation fa re-render e mostra SIGN OUT'],
+  why: 'Il render viene SEMPRE prima dell\'effect: React disegna, poi esegue gli effetti. Per questo per un istante l\'utente vede SIGN IN anche se è loggato.',
+  explain: ['Quel lampo di "SIGN IN" all\'avvio è un vero difetto di UX. Lo affronta una domanda da dev qui sotto.'] });
+Lab.quiz('#q4', { id: 'm5-q4', question: 'Nell\'effect del Provider, cosa cambia scrivendo <code>return unsubscribe()</code> invece di <code>return unsubscribe</code>?',
+  options: [
+    { t: 'Niente, è solo stile', why: '<span class="step">Le parentesi <b>eseguono</b> la funzione. Con <code>unsubscribe()</code> ti disiscrivi subito, nello stesso istante in cui ti sei iscritto.</span>' },
+    { t: 'Ti disiscrivi immediatamente: il listener non riceverà mai login o logout', ok: true, why: '<span class="step"><code>unsubscribe()</code> viene chiamata subito, e React riceve il suo valore di ritorno (<code>undefined</code>) come cleanup, cioè nessun cleanup. Risultato: Navigation non si aggiorna mai.</span><span class="step">Distinzione chiave: <code>fn</code> è la funzione, <code>fn()</code> è il suo <b>risultato</b>. Vale anche per <code>onClick={signOutUser}</code> contro <code>onClick={signOutUser()}</code>.</span>' },
+    { t: 'Errore: useEffect non può restituire undefined', why: '<span class="step">Un effect può restituire undefined: vuol dire "nessun cleanup". Nessun errore, ed è proprio per questo che il bug è subdolo.</span>' },
+  ] });
+Lab.quiz('#q5', { id: 'm5-q5', question: 'In un progetto con <b>React 17</b> copi dalla doc di React: <code>&lt;UserContext value={value}&gt;{children}&lt;/UserContext&gt;</code>. Cosa succede?',
+  options: [
+    { t: 'Funziona: è la sintassi moderna', why: '<span class="step">È moderna per <b>React 19</b>. Nella tua versione l\'oggetto context non è un componente Provider: bisogna usare <code>.Provider</code>.</span>' },
+    { t: 'Non fornisce il valore: i consumer ricevono il default (o React segnala un errore di tipo di elemento)', ok: true, why: '<span class="step">In React 17 serve <code>&lt;UserContext.Provider value={value}&gt;</code>. Il comportamento esatto dipende dalla versione, ma di sicuro il value <b>non</b> arriva. Lezione T1: la documentazione documenta l\'ultima versione, quindi controlla sempre il <code>package.json</code>.</span>' },
+    { t: 'Funziona solo se aggiungi <code>useMemo</code>', why: '<span class="step"><code>useMemo</code> ottimizza il value, ma non cambia quale componente fa da Provider.</span>' },
+  ] });
+Lab.quiz('#q6', { id: 'm5-q6', question: 'Utente <b>già loggato</b> ieri. Apre il sito. Cosa vede nella Navigation durante i primissimi millisecondi, e perché?',
+  options: [
+    { t: 'SIGN OUT: Firebase ha la sessione salvata', why: '<span class="step">Firebase ce l\'ha, ma React lo sa solo quando la callback viene chiamata, cioè <b>dopo</b> il primo render e dopo l\'effect. Al primo render <code>currentUser</code> vale <code>useState(null)</code>.</span>' },
+    { t: 'SIGN IN per un istante, poi SIGN OUT: <code>null</code> al primo render significa "non lo so ancora", ma il codice lo tratta come "non loggato"', ok: true, why: '<span class="step">È un problema di <b>modellazione dello stato</b>: un solo valore, <code>null</code>, viene usato per due significati diversi ("sconosciuto" e "uscito").</span><span class="step">Soluzione da dev: uno stato in più, per esempio <code>const [isAuthLoading, setIsAuthLoading] = useState(true)</code> messo a false nella prima callback. Finché è true, la Navigation non mostra né SIGN IN né SIGN OUT.</span>' },
+    { t: 'Niente: React aspetta Firebase prima di disegnare', why: '<span class="step">React non aspetta mai un effect per disegnare: prima disegna, poi esegue gli effect. È proprio questo il motivo del lampo.</span>' },
+  ] });
+Lab.quiz('#q7', { id: 'm5-q7', question: 'Sign-up con email (lezione 11). <code>SignUpForm</code> chiama <code>createAuthUserWithEmailAndPassword</code> e poi <code>createUserDocumentFromAuth(user, { displayName })</code>. Nel frattempo il listener del Provider chiama <code>createUserDocumentFromAuth(user)</code>, <b>senza</b> displayName. Quale documento finisce in Firestore?',
+  options: [
+    { t: 'Sempre quello con displayName: lo crea il form', why: '<span class="step">Guarda l\'ordine reale. <code>createUserWithEmailAndPassword</code> fa login, il listener scatta, e la sua chiamata parte <b>mentre il form sta ancora aspettando</b>. Entrambe fanno getDoc, entrambe possono vedere "non esiste".</span>' },
+    { t: 'Dipende da chi scrive per ultimo: è una race condition, e il listener può creare il documento con <code>displayName: null</code>', ok: true, why: '<span class="step">Due chiamate "controlla, poi agisci" sullo stesso documento (M3, domanda 13). Se il listener scrive per primo, la chiamata del form trova il documento già esistente e <b>non</b> scrive. Risultato: <code>displayName: null</code>.</span><span class="step">È un bug reale del codice del corso. Soluzioni: aggiornare il profilo Auth con <code>updateProfile(user, { displayName })</code> prima che il listener legga, oppure fare in modo che il form aggiorni il campo con <code>setDoc</code> e <code>{merge: true}</code>.</span>' },
+    { t: 'Due documenti: uno per chiamata', why: '<span class="step">Stesso uid vuol dire stesso indirizzo, quindi un solo documento. La domanda è <b>quale contenuto</b> sopravvive.</span>' },
+  ] });
+Lab.quiz('#q8', { id: 'm5-q8', question: 'Un componente fa <code>const { removeItemFromCart } = useContext(CartContext)</code>. Il CartProvider (corso, lezione 16) espone <code>removeItemToCart</code>. Il default dichiara <code>removeItemFromCart: () =&gt; {}</code>. Cosa succede al click?',
+  options: [
+    { t: 'Niente: viene usata la funzione vuota del default', why: '<span class="step">Il default si usa solo <b>senza</b> Provider. Qui un Provider c\'è, quindi il componente riceve il <code>value</code> vero, in cui la chiave <code>removeItemFromCart</code> non esiste.</span>' },
+    { t: '<code>TypeError: removeItemFromCart is not a function</code>', ok: true, why: '<span class="step">Il destructuring di una chiave inesistente dà <code>undefined</code>, e chiamare <code>undefined()</code> provoca un TypeError. Il default dava una falsa sicurezza.</span><span class="step">Come lo previene un dev: un custom hook <code>useCart()</code> che controlla il value, oppure TypeScript, che segnalerebbe la chiave mancante mentre scrivi.</span>' },
+    { t: 'React segnala in console che la chiave non esiste', why: '<span class="step">React non conosce le chiavi del tuo value: è un oggetto qualsiasi. Nessun avviso, solo il crash al click.</span>' },
+  ] });
+Lab.quiz('#q9', { id: 'm5-q9', question: 'Qual è il bug?', code: "const addItemToCart = (product) => {\n  const existing = cartItems.find((i) => i.id === product.id);\n  if (existing) {\n    existing.quantity += 1;\n    setCartItems([...cartItems]);\n  } else {\n    setCartItems([...cartItems, { ...product, quantity: 1 }]);\n  }\n};",
+  options: [
+    { t: 'Nessuno: l\'array è nuovo, quindi React fa re-render', why: '<span class="step">L\'array è nuovo, sì, e il re-render avviene. Ma <code>existing</code> è <b>lo stesso oggetto</b> che c\'era nello state precedente, ed è stato modificato sul posto.</span>' },
+    { t: 'Modifica sul posto l\'oggetto nello state precedente: chi conserva lo stato vecchio, o confronta gli elementi per riferimento, vede valori sbagliati', ok: true, why: '<span class="step">L\'immutabilità vale a <b>ogni livello</b>: array nuovo E oggetto nuovo per l\'elemento cambiato (<code>{ ...item, quantity: item.quantity + 1 }</code>). Altrimenti un componente memoizzato che riceve <code>cartItem</code> non vede il cambiamento (stesso riferimento), e lo state "precedente" è stato corrotto.</span>' },
+    { t: '<code>find</code> restituisce una copia, quindi la modifica va persa', why: '<span class="step">MDN, Array.prototype.find, Return value: restituisce <b>l\'elemento</b>, non una copia. È proprio per questo che la modifica tocca l\'originale.</span>' },
+  ] });
+Lab.quiz('#q10', { id: 'm5-q10', question: 'Perché nel listener <code>createUserDocumentFromAuth(user)</code> <b>non</b> ha <code>await</code>? Cosa cambierebbe aggiungendolo (rendendo la callback async)?',
+  options: [
+    { t: 'È una dimenticanza: senza await il documento non viene creato', why: '<span class="step">Il documento viene creato lo stesso: la Promise parte e completa per conto suo. <code>await</code> decide solo se <b>aspettare</b>, non se eseguire.</span>' },
+    { t: 'Con await, <code>setCurrentUser</code> verrebbe chiamata solo dopo la scrittura in Firestore: UI più lenta, ma ordine garantito', ok: true, why: '<span class="step">È un compromesso (T1: "dipende da cosa ti serve"). Senza await la UI è immediata ma il documento potrebbe non esistere ancora quando un componente lo legge. Con await è più lenta, ma i dati sono coerenti. Aggiungerlo non darebbe errori: l\'SDK chiama la callback e ignora la Promise che restituisce.</span>' },
+    { t: 'Le callback di onAuthStateChanged non possono essere async', why: '<span class="step">Possono esserlo. L\'SDK ignora il valore restituito, ma la funzione viene eseguita normalmente.</span>' },
+  ] });
+Lab.quiz('#q11', { id: 'm5-q11', question: 'Con <code>value = { cartItems, isCartOpen, setIsCartOpen, addItemToCart, … }</code> in un unico CartContext, aprire il carrello fa re-render di tutte le <code>ProductCard</code>, che usano solo <code>addItemToCart</code>. Quale soluzione elimina davvero quei re-render?',
+  options: [
+    { t: 'Avvolgere ProductCard in <code>React.memo</code>', why: '<span class="step">Caveat della doc di useContext: <code>memo</code> non impedisce a un componente di ricevere i nuovi valori del context. Se ProductCard legge CartContext, fa re-render comunque.</span>' },
+    { t: 'Dividere il context: uno per i dati che cambiano (stato) e uno per le azioni (stabili, con useCallback/useMemo)', ok: true, why: '<span class="step">ProductCard si iscriverebbe solo al context delle azioni, il cui value non cambia mai, quindi zero re-render. È un pattern noto (state context + dispatch context).</span><span class="step">Prima di applicarlo chiediti: <b>ne vale la pena?</b> Con 30 card, un re-render costa pochissimo. Ottimizzare senza misurare è un classico errore.</span>' },
+    { t: 'Usare <code>useMemo</code> sul value del CartProvider', why: '<span class="step">useMemo fa cambiare il value solo quando cambiano le dipendenze, ma <code>isCartOpen</code> è tra le dipendenze. Quando il carrello si apre il value cambia, e tutti i consumer fanno re-render.</span>' },
+  ] });
+Lab.quizScore('#score');
+Lab.exercises('#ex-list', 'm5');
+</script>
+</body>
+</html>

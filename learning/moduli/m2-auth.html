@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>M2 · Firebase Auth</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-root=".." data-module="m2">
+<div class="lab">
+<nav class="lab-nav" id="lab-nav"></nav>
+<main class="lab-main">
+
+<div class="kicker">Modulo 2 · Firebase Authentication</div>
+<h1>Chi sei? Login, provider, sessioni ed errori</h1>
+<p class="lead">Google con il popup, email e password, <code>UserCredential</code> e <code>User</code>, la sessione che sopravvive al refresh, i codici di errore. C'è anche un bug reale nel tuo SignInForm, che scoprirai leggendo la documentazione.</p>
+<ul class="toc">
+  <li><a href="#problema">① Il problema</a></li><li><a href="#teoria">② Teoria</a></li><li><a href="#modello">③ Modello mentale</a></li><li><a href="#flusso">④ Flusso animato</a></li><li><a href="#dati">⑤ Forma dei dati</a></li><li><a href="#codice">⑥ Nel tuo codice</a></li><li><a href="#componenti">⑦ Nei componenti</a></li><li><a href="#documentazione">⑧ Doc ufficiale</a></li><li><a href="#errori">⑨ Errori tipici</a></li><li><a href="#verifica">⑩ Verifica</a></li><li><a href="#esercizi">⑪ Esercizi</a></li>
+</ul>
+
+<h2 id="problema"><span class="section-num">1</span>Il problema: l'identità è difficile da fare bene</h2>
+<p>Un sistema di login fatto in casa richiede: salvare le password in modo sicuro (hash con salt, mai in chiaro), proteggersi dai tentativi a raffica, gestire le sessioni, il reset password, la verifica email, OAuth con Google… Ogni errore è una falla di sicurezza. Firebase Auth fa tutto questo per te e ti restituisce un'informazione semplice: <b>chi è questo utente</b> (<dfn data-term="uid">uid</dfn>), garantito dal server.</p>
+
+<h2 id="teoria"><span class="section-num">2</span>Teoria e terminologia</h2>
+<div class="table-wrap"><table>
+<tr><th>Termine</th><th>Significato</th></tr>
+<tr><td><b>Auth</b> (<code>getAuth()</code>)</td><td>L'istanza del servizio, con lo stato del login nel browser (<code>auth.currentUser</code>).</td></tr>
+<tr><td><b>Provider</b></td><td>Il "documento" con cui l'utente dimostra chi è: <code>password</code> (email + password), <code>google.com</code> (account Google, via OAuth)…</td></tr>
+<tr><td><b>OAuth</b></td><td>Protocollo con cui Google conferma l'identità a Firebase senza che la tua app veda mai la password Google.</td></tr>
+<tr><td><code>signInWithPopup</code></td><td>Apre una finestra di Google. La Promise si risolve quando l'utente ha scelto l'account (o viene rifiutata se chiude la finestra).</td></tr>
+<tr><td><code>signInWithRedirect</code></td><td>Porta l'intera pagina su Google, che poi ti rimanda indietro: la tua app <b>si ricarica</b>. Il risultato si legge con <code>getRedirectResult(auth)</code> dopo il ritorno.</td></tr>
+<tr><td><code>createUserWithEmailAndPassword</code></td><td>Crea l'account <b>e fa anche il login</b>. Fallisce se l'email è già usata o la password è troppo debole.</td></tr>
+<tr><td><code>signInWithEmailAndPassword</code></td><td>Login con credenziali esistenti.</td></tr>
+<tr><td><code>signOut</code></td><td>Logout: cancella la sessione locale. Restituisce <code>Promise&lt;void&gt;</code>.</td></tr>
+<tr><td><b>UserCredential</b></td><td>Il risultato di un login: <code>{ user, providerId, operationType }</code>.</td></tr>
+<tr><td><b>User</b></td><td>L'utente: <code>uid</code>, <code>email</code>, <code>displayName</code>, <code>photoURL</code>, <code>providerData</code>…</td></tr>
+<tr><td><b>ID token</b></td><td>Un "pass" firmato da Google, con scadenza breve, che l'SDK allega alle richieste (anche a Firestore: è da lì che arriva <code>request.auth</code> nelle Rules). L'SDK lo rinnova da solo.</td></tr>
+<tr><td><b>Persistenza</b></td><td>Sul web, di default la sessione viene salvata nel browser (IndexedDB, database <code>firebaseLocalStorageDb</code>): chiudi e riapri il sito e sei ancora loggato.</td></tr>
+<tr><td><code>onAuthStateChanged</code></td><td>Observer che ti avvisa a ogni login, logout e sessione ripristinata (M5).</td></tr>
+</table></div>
+
+<h3>I codici di errore e la "email enumeration protection"</h3>
+<p>Gli errori di Auth sono <code>FirebaseError</code> con una proprietà <code>code</code>, per esempio <code>'auth/email-already-in-use'</code>. Attenzione: per i progetti Firebase creati <b>dal 15 settembre 2023</b> in poi, la <b>email enumeration protection</b> è attiva di default. Con questa protezione, un login fallito (email inesistente <b>oppure</b> password sbagliata) restituisce lo stesso errore, <code>INVALID_LOGIN_CREDENTIALS</code>, che l'SDK JavaScript traduce in <b><code>auth/invalid-credential</code></b>. Così un malintenzionato non può scoprire quali email sono registrate.</p>
+<div class="table-wrap"><table>
+<tr><th>Codice</th><th>Quando</th></tr>
+<tr><td><code>auth/email-already-in-use</code></td><td>sign-up con un'email già registrata</td></tr>
+<tr><td><code>auth/weak-password</code></td><td>password troppo corta (meno di 6 caratteri)</td></tr>
+<tr><td><code>auth/invalid-email</code></td><td>email malformata</td></tr>
+<tr><td><code>auth/invalid-credential</code></td><td>login fallito, con la protezione attiva</td></tr>
+<tr><td><code>auth/wrong-password</code>, <code>auth/user-not-found</code></td><td>login fallito, ma <b>solo</b> con la protezione disattivata (progetti vecchi)</td></tr>
+<tr><td><code>auth/popup-closed-by-user</code></td><td>l'utente ha chiuso il popup di Google</td></tr>
+<tr><td><code>auth/too-many-requests</code></td><td>troppi tentativi: blocco temporaneo</td></tr>
+</table></div>
+
+<h2 id="modello"><span class="section-num">3</span>Modello mentale: la reception dell'hotel</h2>
+<div class="card analogy"><div class="icon">🏨</div><div>
+<b>Auth</b> è la reception. Mostri un <b>documento</b> (il provider): la carta d'identità (email e password) o una lettera di presentazione di Google (OAuth). La reception verifica e ti dà una <b>tessera magnetica</b> (l'ID token) con scadenza: a ogni porta (Firestore) la tessera viene letta e le Rules decidono se aprire. Sulla tessera c'è il tuo <b>numero di cliente</b> (uid), che resta lo stesso per sempre. Il <b>portiere di notte</b> (persistenza) si ricorda di te se torni: non devi rifare il check-in.
+</div></div>
+
+<h2 id="flusso"><span class="section-num">4</span>Flusso animato</h2>
+<template id="svg-auth">
+<svg class="diagram" viewBox="0 0 900 230" role="img" aria-label="Login con popup Google e con email">
+  <g data-node="app"><rect class="box react" x="15" y="70" width="160" height="90" rx="10"/><text x="95" y="100" text-anchor="middle" font-weight="700" class="t-react">SignInForm</text><text x="95" y="122" text-anchor="middle" font-size="11" class="mono">await signIn…()</text></g>
+  <g data-node="sdk"><rect class="box auth" x="215" y="70" width="170" height="90" rx="10"/><text x="300" y="100" text-anchor="middle" font-weight="700" class="t-auth">SDK Auth</text><text x="300" y="122" text-anchor="middle" font-size="11" class="mono">auth.currentUser</text><text x="300" y="140" text-anchor="middle" font-size="11" class="muted">+ IndexedDB</text></g>
+  <g data-node="popup"><rect class="box" x="425" y="10" width="190" height="80" rx="10" style="stroke:var(--ink)"/><text x="520" y="40" text-anchor="middle" font-weight="700">🪟 Popup Google</text><text x="520" y="62" text-anchor="middle" font-size="11" class="muted">l'utente sceglie l'account</text></g>
+  <g data-node="google"><rect class="box" x="655" y="10" width="230" height="80" rx="10" style="stroke:var(--good)"/><text x="770" y="40" text-anchor="middle" font-weight="700">Google (OAuth)</text><text x="770" y="62" text-anchor="middle" font-size="11" class="muted">conferma l'identità</text></g>
+  <g data-node="server"><rect class="box auth" x="545" y="130" width="340" height="80" rx="10"/><text x="715" y="160" text-anchor="middle" font-weight="700" class="t-auth">🔐 Server Firebase Auth</text><text x="715" y="182" text-anchor="middle" font-size="11" class="muted">verifica, crea/legge l'account, emette il token</text></g>
+  <path data-node="w1" data-flow class="wire wire-react" d="M175 115 H213"/>
+  <path data-node="w2" data-flow class="wire" d="M385 95 C 400 60 410 50 423 50" style="stroke:var(--ink)"/>
+  <path data-node="w3" data-flow class="wire" d="M615 50 H653" style="stroke:var(--good)"/>
+  <path data-node="w4" data-flow class="wire wire-auth" d="M770 90 V128"/>
+  <path data-node="w5" data-flow class="wire wire-auth" d="M385 140 C 440 170 500 170 543 170"/>
+  <path data-node="w6" data-flow class="wire wire-auth" d="M543 190 C 400 200 250 200 120 162"/>
+</svg>
+</template>
+<pre class="code" id="code-auth" hidden>// firebase.utils.js
+export const signInWithGooglePopup = () =>
+  signInWithPopup(auth, googleProvider);
+
+export const signInAuthUserWithEmailAndPassword = async (email, password) => {
+  if (!email || !password) return;
+  return await signInWithEmailAndPassword(auth, email, password);
+};
+
+// sign-in-form.component.jsx
+const signInWithGoogle = async () => {
+  const { user } = await signInWithGooglePopup();
+  await createUserDocumentFromAuth(user);
+};
+
+const handleSubmit = async (event) => {
+  event.preventDefault();
+  try {
+    const response = await signInAuthUserWithEmailAndPassword(email, password);
+    resetFormFields();
+  } catch (error) {
+    switch (error.code) {
+      case 'auth/wrong-password': alert('incorrect password for email'); break;
+      case 'auth/user-not-found': alert('no user associated with this email'); break;
+      default: console.log(error);
+    }
+  }
+};</pre>
+<div id="flow"></div>
+
+<h2 id="dati"><span class="section-num">5</span>Forma dei dati</h2>
+<div class="grid-2">
+  <div class="card"><b>UserCredential</b> (Google)<div id="insp-cred" style="margin-top:8px"></div></div>
+  <div class="card"><b>L'errore</b> di un login fallito<div id="insp-err" style="margin-top:8px"></div></div>
+</div>
+<div class="callout warn"><span class="title">Non salvare l'oggetto User intero</span>
+<code>User</code> contiene metodi, token e riferimenti interni. Nel documento Firestore salvi solo i campi che ti servono (<code>displayName</code>, <code>email</code>), come fa <code>createUserDocumentFromAuth</code>. Nello state di React invece l'oggetto intero va bene: lo legge solo la tua app.</div>
+
+<h2 id="codice"><span class="section-num">6</span>Nel tuo codice</h2>
+<div class="annot">
+<pre class="code">const googleProvider = new GoogleAuthProvider();
+
+googleProvider.setCustomParameters({
+  prompt: 'select_account',
+});
+
+export const auth = getAuth();
+export const signInWithGooglePopup = () =>
+  signInWithPopup(auth, googleProvider);
+export const signInWithGoogleRedirect = () =>
+  signInWithRedirect(auth, googleProvider);
+
+export const createAuthUserWithEmailAndPassword = async (email, password) => {
+  if (!email || !password) return;
+  return await createUserWithEmailAndPassword(auth, email, password);
+};
+
+export const signInAuthUserWithEmailAndPassword = async (email, password) => {
+  if (!email || !password) return;
+  return await signInWithEmailAndPassword(auth, email, password);
+};</pre>
+<ol>
+  <li data-lines="1-5"><b>Provider configurato una volta</b>. <code>prompt: 'select_account'</code> obbliga Google a mostrare la scelta dell'account anche se ne hai uno solo già collegato.</li>
+  <li data-lines="7"><b>auth</b>: l'istanza condivisa da tutte le funzioni sotto.</li>
+  <li data-lines="8-9"><b>Wrapper sottili</b>: nascondono <code>auth</code> e il provider ai componenti. Restituisce direttamente la Promise di <code>signInWithPopup</code>.</li>
+  <li data-lines="10-11"><b>Redirect</b>: esportata ma non usata nei tuoi componenti. Se la usassi, ti servirebbe anche <code>getRedirectResult</code> al ritorno (oppure il listener di M5, che se ne accorge da solo).</li>
+  <li data-lines="14,19"><b>Guardia</b>: senza email o password restituisce <code>undefined</code>. Attenzione: chi chiama e fa <code>const { user } = await …</code> va in crash (<code>Cannot destructure property 'user' of undefined</code>). È una guardia che <b>sposta</b> il problema invece di risolverlo.</li>
+  <li data-lines="15,20"><b>return await</b>: dentro un try/catch servirebbe (M0, domanda 7). Qui non c'è try, quindi <code>return</code> da solo sarebbe equivalente.</li>
+</ol>
+</div>
+
+<h2 id="componenti"><span class="section-num">7</span>Nei componenti: chi parla con Auth</h2>
+<div class="table-wrap"><table>
+<tr><th>Componente</th><th>Azione</th><th>Gestione errori oggi</th><th>Problema</th></tr>
+<tr><td>SignInForm · Google</td><td><code>signInWithGooglePopup</code> + <code>createUserDocumentFromAuth</code></td><td>nessuna</td><td>popup chiuso → "Uncaught (in promise)"</td></tr>
+<tr><td>SignInForm · email</td><td><code>signInAuthUserWithEmailAndPassword</code></td><td>switch su <code>wrong-password</code> / <code>user-not-found</code></td><td>con la protezione attiva questi codici non arrivano: l'utente non vede <b>nessun</b> messaggio</td></tr>
+<tr><td>SignUpForm</td><td><code>createAuthUserWithEmailAndPassword</code> + documento</td><td><code>email-already-in-use</code> → alert</td><td><code>weak-password</code> e <code>invalid-email</code> finiscono solo in console</td></tr>
+<tr><td>Navigation (M5)</td><td><code>signOutUser</code></td><td>nessuna</td><td>raro, ma possibile</td></tr>
+<tr><td>UserProvider (M5)</td><td><code>onAuthStateChanged</code></td><td>non serve</td><td>il callback di errore è deprecato (M5 ⑧)</td></tr>
+</table></div>
+
+<h2 id="documentazione"><span class="section-num">8</span>Documentazione ufficiale ↔ corso</h2>
+<h3>Lo snippet usa .then, il corso async/await</h3>
+<div class="grid-2">
+<div><p><span class="pill auth">DOC</span> <a href="https://firebase.google.com/docs/auth/web/password-auth" target="_blank" rel="noopener">Password Authentication</a></p>
+<pre class="code">import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
+
+const auth = getAuth();
+createUserWithEmailAndPassword(auth, email, password)
+  .then((userCredential) => {
+    // Signed up
+    const user = userCredential.user;
+    // ...
+  })
+  .catch((error) => {
+    const errorCode = error.code;
+    const errorMessage = error.message;
+    // ..
+  });</pre></div>
+<div><p><span class="pill react">CORSO</span> (utils + SignUpForm)</p>
+<pre class="code">export const createAuthUserWithEmailAndPassword = async (email, password) => {
+  if (!email || !password) return;
+  return await createUserWithEmailAndPassword(auth, email, password);
+};
+
+try {
+  const { user } = await createAuthUserWithEmailAndPassword(email, password);
+  // ...
+} catch (error) {
+  if (error.code === 'auth/email-already-in-use') { /* ... */ }
+}</pre></div>
+</div>
+<p style="font-size:13px;color:var(--muted)">Snippet di Firebase (Google), licenza Apache 2.0. Traduzione .then → await: vedi M0 ⑧.</p>
+
+<h3>Cosa dice la reference (e il corso no)</h3>
+<ul>
+  <li><b>createUserWithEmailAndPassword</b>: <i>"On successful creation of the user account, this user will also be signed in to your application."</i> Quindi il listener di M5 scatta già durante il sign-up: è l'origine della race condition di M5, domanda 7.</li>
+  <li><b>signInWithPopup</b>: <i>"This method does not work in a Node.js environment"</i>. Per questo negli esercizi usiamo un simulatore.</li>
+  <li><b>signOut</b>: restituisce <code>Promise&lt;void&gt;</code>, come <code>setDoc</code>.</li>
+  <li><b>onAuthStateChanged</b>: i parametri <code>error</code> e <code>completed</code> sono deprecati e non vengono mai chiamati.</li>
+</ul>
+<div class="callout bad"><span class="title">Il bug che trovi solo leggendo la documentazione</span>
+La pagina Google Cloud sulla <a href="https://cloud.google.com/identity-platform/docs/admin/email-enumeration-protection" target="_blank" rel="noopener">email enumeration protection</a> dice che i progetti creati dal 15 settembre 2023 la hanno attiva di default, e che i login falliti restituiscono <code>INVALID_LOGIN_CREDENTIALS</code>. Nel pacchetto <code>firebase</code> che hai installato questo errore viene tradotto in <code>"invalid-credential"</code> (l'ho verificato nel codice dell'SDK in <code>node_modules</code>). Il tuo progetto è recente, quindi gli <code>case 'auth/wrong-password'</code> e <code>'auth/user-not-found'</code> del tuo SignInForm <b>non scatteranno mai</b>: l'utente che sbaglia password non vede nessun messaggio, solo un log in console.<br><br>Il corso è stato registrato prima di questo cambiamento. La documentazione è più aggiornata del video.</div>
+
+<h2 id="errori"><span class="section-num">9</span>Errori tipici</h2>
+<div class="card"><h3 style="margin-top:0">❶ Fidarsi dei codici di errore visti nel video</h3>
+<div class="grid-2"><div class="callout bad"><span class="title">Modello sbagliato</span>"Se il corso controlla quel codice, quel codice arriva."</div><div class="callout good"><span class="title">Modello giusto</span>"I codici dipendono dalla configurazione del progetto e dalla versione dell'SDK. Li verifico: provo il caso (password sbagliata) e guardo <code>error.code</code> in console."</div></div></div>
+<div class="card"><h3 style="margin-top:0">❷ "Con email e password ho il displayName"</h3>
+<p><code>createUserWithEmailAndPassword</code> riceve solo email e password: <code>user.displayName</code> è <code>null</code>. Il nome del form va salvato a parte (in Firestore con <code>additionalInformation</code>, oppure nel profilo Auth con <code>updateProfile(user, { displayName })</code>).</p></div>
+<div class="card"><h3 style="margin-top:0">❸ Ogni errore in un alert</h3>
+<p><code>auth/popup-closed-by-user</code> non è un errore dell'utente: è una scelta. Mostrarlo come un errore è cattiva UX. Gli errori si dividono in tre gruppi: <b>da mostrare</b> (credenziali sbagliate), <b>da ignorare</b> (popup chiuso), <b>da loggare e mostrare in forma generica</b> (rete, errori interni).</p></div>
+<div class="card"><h3 style="margin-top:0">❹ Usare <code>auth.currentUser</code> all'avvio</h3>
+<p>Al caricamento della pagina, la sessione viene ripristinata in modo <b>asincrono</b>: <code>auth.currentUser</code> può valere <code>null</code> per qualche istante anche se l'utente è loggato. Per sapere "chi è loggato" si usa l'observer (M5).</p></div>
+
+<h2 id="verifica"><span class="section-num">10</span>Verifica</h2>
+<div class="callout" id="score"></div>
+<div id="q1"></div><div id="q2"></div><div id="q3"></div>
+<h3>Domande da dev</h3>
+<div id="q4"></div><div id="q5"></div><div id="q6"></div><div id="q7"></div>
+
+<h2 id="esercizi"><span class="section-num">11</span>Esercizi</h2>
+<div id="ex-list"></div>
+<div class="footer-nav"><a class="btn" href="m1-firebase.html">← M1</a><a class="btn" href="m3-firestore.html">M3 Firestore →</a></div>
+</main>
+</div>
+<script src="../assets/manifest.js"></script>
+<script src="../assets/registro.js"></script>
+<script src="../assets/glossario.js"></script>
+<script src="../assets/app.js"></script>
+<script>
+const CRED = { __type: 'UserCredentialImpl', user: { __type: 'UserImpl', uid: 'g7Hk2', email: 'leo@mail.it', displayName: 'Leandro L.', emailVerified: true, photoURL: 'https://lh3…', providerData: [{ __type: 'Object', providerId: 'google.com' }], getIdToken: 'ƒ getIdToken()' }, providerId: 'google.com', operationType: 'signIn' };
+Lab.renderInspector(document.getElementById('insp-cred'), CRED);
+Lab.renderInspector(document.getElementById('insp-err'), { __type: 'FirebaseError', name: 'FirebaseError', code: 'auth/invalid-credential', message: 'Firebase: Error (auth/invalid-credential).', customData: { __type: 'Object', appName: '[DEFAULT]' } });
+
+Lab.stepper('#flow', { title: 'Login', svg: '#svg-auth', code: '#code-auth', variants: {
+  google: { label: 'Google popup', steps: [
+    { title: 'Click: parte il popup', on: ['app', 'sdk', 'popup'], hot: ['w1', 'w2'], lines: [[11, 12]], dataLabel: 'Stato', text: '<p><code>signInWithPopup</code> apre la finestra di Google. La Promise resta <b>pending</b> finché l\'utente non fa qualcosa: possono essere secondi o minuti.</p>', data: { promise: '⏳ pending', 'auth.currentUser': null } },
+    { title: 'Google verifica l\'utente', on: ['popup', 'google'], hot: ['w3'], lines: [12], dataLabel: 'OAuth', text: '<p>L\'utente sceglie l\'account. Google conferma l\'identità a Firebase con un codice: la password Google non passa mai dalla tua app.</p>', data: { 'la tua app vede la password Google?': false } },
+    { title: 'Firebase crea o legge l\'account', on: ['google', 'server'], hot: ['w4'], lines: [12], dataLabel: 'Server', text: '<p>Primo accesso: Firebase crea un account con un <b>nuovo uid</b>. Accessi successivi: ritrova lo stesso uid. Poi emette l\'ID token.</p>', data: { uid: 'g7Hk2', 'nuovo account?': 'solo la prima volta' } },
+    { title: 'SDK: sessione salvata, listener avvisati', on: ['server', 'sdk'], hot: ['w5'], lines: [12], dataLabel: 'SDK', text: '<p>L\'SDK salva la sessione in IndexedDB, aggiorna <code>auth.currentUser</code> e chiama i listener di <code>onAuthStateChanged</code> (M5).</p>', data: { 'auth.currentUser': { __type: 'User', uid: 'g7Hk2' }, IndexedDB: 'firebaseLocalStorageDb ✔' } },
+    { title: 'La Promise si risolve', on: ['sdk', 'app'], hot: ['w6'], lines: [[12, 13]], dataLabel: 'Valore di await', text: '<p><code>await</code> restituisce il <code>UserCredential</code>, e il destructuring estrae <code>user</code>. Il componente prosegue con il documento Firestore (M3).</p>', data: { UserCredential: CRED } },
+  ] },
+  email: { label: 'Email: password sbagliata', steps: [
+    { title: 'Submit con password sbagliata', on: ['app', 'sdk'], hot: ['w1'], lines: [[16, 19]], dataLabel: 'Input', text: '<p>L\'utente scrive un\'email esistente con una password sbagliata.</p>', data: { email: 'leo@mail.it', password: '••••• (sbagliata)' } },
+    { title: 'Il server risponde: credenziali non valide', on: ['sdk', 'server'], hot: ['w5'], lines: [19], dataLabel: 'Risposta del server', text: '<p>Con la email enumeration protection (progetti dal 15/09/2023), il server non dice <i>cosa</i> è sbagliato: risponde <code>INVALID_LOGIN_CREDENTIALS</code>.</p>', data: { risposta: 'INVALID_LOGIN_CREDENTIALS' } },
+    { title: 'La Promise viene rifiutata', on: ['sdk', 'app'], hot: ['w6'], lines: [19, 21], dataLabel: 'error', text: '<p><code>await</code> lancia l\'errore, che salta al <code>catch</code>. <code>resetFormFields()</code> non viene eseguita.</p>', data: { error: { __type: 'FirebaseError', code: 'auth/invalid-credential' } } },
+    { title: 'Lo switch non trova il caso', on: ['app'], lines: [[22, 26]], dataLabel: 'Esito', text: '<p><code>\'auth/invalid-credential\'</code> non è né <code>wrong-password</code> né <code>user-not-found</code>, quindi si finisce in <code>default</code>: <code>console.log(error)</code>.</p><p><b>L\'utente non vede nessun messaggio.</b> Il form resta pieno e sembra che non sia successo niente.</p>', data: { 'alert mostrato?': false, 'console.log': 'FirebaseError: auth/invalid-credential' } },
+  ] },
+} });
+
+Lab.quiz('#q1', { id: 'm2-q1', question: 'Dopo <code>createUserWithEmailAndPassword</code> andato a buon fine, l\'utente…',
+  options: [ { t: 'deve ancora fare login', why: '<span class="step">La reference lo dice esplicitamente: l\'utente viene anche "signed in". Rileggi la sezione ⑧.</span>' }, { t: 'è già loggato, e i listener di onAuthStateChanged vengono avvisati', ok: true }, { t: 'è loggato solo dopo aver verificato l\'email', why: '<span class="step">La verifica email è un processo separato e facoltativo. Il login avviene subito.</span>' } ] });
+Lab.quiz('#q2', { id: 'm2-q2', question: 'Qual è la differenza pratica tra popup e redirect?',
+  options: [ { t: 'Nessuna, cambia solo la grafica', why: '<span class="step">Con il redirect la tua app <b>viene scaricata e ricaricata</b>: il codice dopo <code>await signInWithRedirect</code> non viene mai eseguito.</span>' }, { t: 'Con il redirect la pagina si ricarica: il risultato si legge al ritorno con <code>getRedirectResult</code> (o con il listener)', ok: true, why: '<span class="step">Il popup è più semplice da gestire con async/await. Il redirect funziona meglio sui dispositivi mobili, dove i popup vengono spesso bloccati.</span>' }, { t: 'Il popup non funziona con Google', why: '<span class="step">È proprio quello che usi tu.</span>' } ] });
+Lab.quiz('#q3', { id: 'm2-q3', question: 'Utente creato con email e password. Cosa vale <code>user.displayName</code>?',
+  options: [ { t: 'Il nome scritto nel form', why: '<span class="step">Il form non passa il nome ad Auth: <code>createUserWithEmailAndPassword(auth, email, password)</code> non ha un parametro per il nome.</span>' }, { t: '<code>null</code>', ok: true, why: '<span class="step">Ecco perché esiste <code>additionalInformation</code> (M3 E1 D3).</span>' }, { t: '<code>undefined</code>', why: '<span class="step">Firebase usa esplicitamente <code>null</code> per i campi del profilo vuoti, e la differenza conta: Firestore accetta <code>null</code> ma rifiuta <code>undefined</code>.</span>' } ] });
+Lab.quiz('#q4', { id: 'm2-q4', question: 'Nel tuo SignInForm un utente sbaglia password. Cosa vede?',
+  options: [ { t: 'L\'alert "incorrect password for email"', why: '<span class="step">Quel case scatta solo con il codice <code>auth/wrong-password</code>, che con la protezione attiva non arriva più.</span>' }, { t: 'Niente: l\'errore <code>auth/invalid-credential</code> finisce nel <code>default</code> e viene solo loggato in console', ok: true, why: '<span class="step">Correzione: un <code>case \'auth/invalid-credential\':</code> con un messaggio <b>neutro</b> ("Email o password non corretti"). Neutro di proposito: non devi dire quale dei due è sbagliato, altrimenti annulli la protezione.</span>' }, { t: 'L\'alert "no user associated with this email"', why: '<span class="step">Anche quel codice non arriva. E se arrivasse, rivelerebbe a chiunque quali email sono registrate.</span>' } ] });
+Lab.quiz('#q5', { id: 'm2-q5', question: 'Al sign-up, l\'utente lascia vuoto il campo password (supponi che il form non abbia <code>required</code>). Cosa succede in <code>handleSubmit</code>?',
+  options: [ { t: 'Firebase restituisce <code>auth/weak-password</code>', why: '<span class="step">Firebase non viene nemmeno chiamato: la guardia <code>if (!email || !password) return;</code> esce prima.</span>' }, { t: 'La guardia restituisce <code>undefined</code>, e <code>const { user } = await …</code> lancia un TypeError, che finisce nel catch come un errore generico', ok: true, why: '<span class="step">"Cannot destructure property \'user\' of undefined". La guardia nasconde il problema vero (dati mancanti) e ne crea uno più oscuro. Meglio <b>lanciare</b> un errore esplicito oppure validare nel form.</span>' }, { t: 'Niente, il form si resetta', why: '<span class="step">Il destructuring di undefined lancia, e il reset viene saltato.</span>' } ] });
+Lab.quiz('#q6', { id: 'm2-q6', question: 'Perché la regola di Firestore <code>request.auth.uid == userId</code> è affidabile, visto che il codice del client lo può modificare chiunque?',
+  options: [ { t: 'Perché il client invia l\'uid in chiaro e il server si fida', why: '<span class="step">Se fosse così, basterebbe mandare l\'uid di un altro utente.</span>' }, { t: 'Perché <code>request.auth</code> viene ricavato dall\'ID token firmato da Google, che il client non può falsificare', ok: true, why: '<span class="step">Il token è firmato crittograficamente. Il server verifica la firma, quindi un client può <b>usare</b> il proprio token ma non <b>fabbricarne</b> uno di un altro utente.</span>' }, { t: 'Perché Firestore controlla l\'indirizzo IP', why: '<span class="step">L\'IP non identifica un utente.</span>' } ] });
+Lab.quiz('#q7', { id: 'm2-q7', question: 'Il popup viene chiuso dall\'utente. Qual è la gestione migliore in <code>signInWithGoogle</code>?',
+  options: [ { t: '<code>alert(error.message)</code> per qualsiasi errore', why: '<span class="step">Chiudere il popup è una scelta legittima: un alert di errore la tratta come uno sbaglio.</span>' }, { t: 'try/catch: se <code>error.code === \'auth/popup-closed-by-user\'</code> non fare niente, altrimenti mostra un messaggio generico e logga l\'errore', ok: true, why: '<span class="step">Classificare gli errori in "da mostrare", "da ignorare" e "generici" è una competenza da dev. È il cuore dell\'esercizio E2.</span>' }, { t: 'Nessun try/catch: tanto l\'app non crasha', why: '<span class="step">Non crasha, ma lascia un errore non gestito in console, e così non puoi distinguere i casi.</span>' } ] });
+Lab.quizScore('#score');
+Lab.exercises('#ex-list', 'm2');
+</script>
+</body>
+</html>

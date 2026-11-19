@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>M1 · Firebase</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-root=".." data-module="m1">
+<div class="lab">
+<nav class="lab-nav" id="lab-nav"></nav>
+<main class="lab-main">
+
+<div class="kicker">Modulo 1 · Firebase: architettura</div>
+<h1>Cos'è Firebase e come si collega alla tua app</h1>
+<p class="lead">Progetto, app web, config, <code>initializeApp</code>, servizi, SDK modulare e la domanda che quasi nessuno si fa: <b>chi protegge i dati</b>, se il codice del frontend lo vede chiunque?</p>
+<ul class="toc">
+  <li><a href="#problema">① Il problema</a></li><li><a href="#teoria">② Teoria</a></li><li><a href="#modello">③ Modello mentale</a></li><li><a href="#flusso">④ Flusso animato</a></li><li><a href="#dati">⑤ Forma dei dati</a></li><li><a href="#codice">⑥ Nel tuo codice</a></li><li><a href="#componenti">⑦ Nei componenti</a></li><li><a href="#documentazione">⑧ Doc ufficiale</a></li><li><a href="#errori">⑨ Errori tipici</a></li><li><a href="#verifica">⑩ Verifica</a></li><li><a href="#esercizi">⑪ Esercizi</a></li>
+</ul>
+
+<h2 id="problema"><span class="section-num">1</span>Il problema: un negozio ha bisogno di un backend</h2>
+<p>CRWN deve registrare utenti, verificarne la password, salvare profili e carrelli. Tradizionalmente servirebbero un server (Node, Java…), un database, un sistema di login sicuro (hashing delle password, sessioni, reset), un hosting e la manutenzione di tutto questo. Firebase è un <dfn data-term="baas">BaaS</dfn>: noleggi questi pezzi già pronti, e il tuo frontend ci parla direttamente.</p>
+<div class="grid-2">
+<div class="callout"><span class="title">Cosa guadagni</span>Niente server da scrivere né da tenere acceso. Login sicuro pronto. Un database che scala. Un piano gratuito per imparare.</div>
+<div class="callout warn"><span class="title">Cosa cambia</span>Il "server" non lo controlli tu: le regole di accesso le scrivi come <b>Security Rules</b>. E sei legato all'API di Google (lock-in): è un motivo in più per isolare Firebase in <code>firebase.utils.js</code>.</div>
+</div>
+
+<h2 id="teoria"><span class="section-num">2</span>Teoria e terminologia</h2>
+<div class="table-wrap"><table>
+<tr><th>Termine</th><th>Cos'è</th><th>Nel tuo caso</th></tr>
+<tr><td><b>Progetto Firebase</b></td><td>Il contenitore nel cloud: servizi, dati, utenti, regole, fatturazione.</td><td><code>crwn-clothing-db-ad3ed</code></td></tr>
+<tr><td><b>App registrata</b></td><td>Un client (web, iOS, Android) dichiarato nel progetto. Ognuno riceve la sua config.</td><td>la tua app web (<code>appId: 1:5062…:web:…</code>)</td></tr>
+<tr><td><b>firebaseConfig</b></td><td>L'"indirizzo" del progetto: dice all'SDK <b>con quale progetto</b> parlare. <b>Non</b> è una password.</td><td>l'oggetto in cima a <code>firebase.utils.js</code></td></tr>
+<tr><td><code>initializeApp(config)</code></td><td>Crea l'istanza <b>FirebaseApp</b> nel browser. Se non le dai un nome, si chiama <code>'[DEFAULT]'</code>.</td><td><code>firebaseApp</code></td></tr>
+<tr><td><b>Servizi</b></td><td>Auth, Firestore, Storage, Hosting…: ognuno ha il suo modulo e la sua funzione <code>getX()</code>.</td><td><code>getAuth()</code>, <code>getFirestore()</code></td></tr>
+<tr><td><dfn data-term="sdk">SDK</dfn> modulare</td><td>Il pacchetto npm <code>firebase</code>, con sotto-percorsi: <code>firebase/app</code>, <code>firebase/auth</code>, <code>firebase/firestore</code>…</td><td><code>firebase</code> 13.2.0</td></tr>
+<tr><td><b>Tree-shaking</b></td><td>Il bundler include nel bundle solo le funzioni che importi davvero.</td><td>non importi Storage → non finisce nel bundle</td></tr>
+<tr><td><dfn data-term="rules">Security Rules</dfn></td><td>Regole valutate <b>sul server</b> a ogni richiesta a Firestore.</td><td>Console → Firestore → Regole</td></tr>
+</table></div>
+
+<h3>I campi della config</h3>
+<div class="table-wrap"><table>
+<tr><th>Campo</th><th>A cosa serve</th></tr>
+<tr><td><code>apiKey</code></td><td>Identifica il progetto verso le API di Google. È nel bundle, quindi è <b>pubblica</b> per natura.</td></tr>
+<tr><td><code>authDomain</code></td><td>Il dominio usato da Auth per i flussi popup/redirect (es. <code>…firebaseapp.com</code>).</td></tr>
+<tr><td><code>projectId</code></td><td>L'identificativo del progetto: Firestore lo usa per sapere quale database interrogare.</td></tr>
+<tr><td><code>storageBucket</code></td><td>Il bucket di Cloud Storage per i file.</td></tr>
+<tr><td><code>messagingSenderId</code></td><td>Per Cloud Messaging (le notifiche push).</td></tr>
+<tr><td><code>appId</code></td><td>L'identificativo di <b>questa</b> app registrata.</td></tr>
+</table></div>
+<div class="callout bad"><span class="title">La domanda chiave: se l'apiKey è pubblica, cosa protegge i dati?</span>
+Tre cose, tutte <b>lato server</b>: le <b>Security Rules</b> (chi può leggere e scrivere cosa), l'<b>autenticazione</b> (<code>request.auth</code> nelle regole sa chi sei) e, se vuoi, <b>App Check</b> (verifica che la richiesta arrivi dalla tua app). Il codice del frontend non protegge niente: chiunque può aprire i DevTools e chiamare l'SDK a mano.</div>
+
+<h2 id="modello"><span class="section-num">3</span>Modello mentale: il centralino</h2>
+<div class="card analogy"><div class="icon">☎️</div><div>
+Il <b>progetto Firebase</b> è un'azienda con diversi uffici (Auth, Firestore, Storage). La <b>config</b> è il <b>numero di telefono</b> dell'azienda: tutti possono conoscerlo. <code>initializeApp</code> è <b>salvare il numero in rubrica</b>. <code>getAuth()</code> e <code>getFirestore()</code> sono <b>gli interni</b> degli uffici. Le <b>Security Rules</b> sono il <b>centralinista</b>: per ogni chiamata decide se passartela, in base a chi sei (<code>request.auth</code>) e a cosa chiedi.
+</div></div>
+<div class="card">
+<svg class="diagram" viewBox="0 0 900 270" role="img" aria-label="Browser con SDK e progetto Firebase nel cloud">
+  <rect class="box react" x="20" y="20" width="360" height="230" rx="12"/>
+  <text x="40" y="46" font-weight="700" class="t-react">Browser · la tua app</text>
+  <g class="mono" font-size="12.5">
+    <rect class="box" x="40" y="62" width="320" height="40" rx="7"/><text x="55" y="87">firebaseConfig  (numero di telefono)</text>
+    <rect class="box" x="40" y="114" width="320" height="40" rx="7"/><text x="55" y="139">initializeApp → app '[DEFAULT]'</text>
+    <rect class="box auth" x="40" y="166" width="150" height="40" rx="7"/><text x="55" y="191">getAuth(app)</text>
+    <rect class="box fs" x="210" y="166" width="150" height="40" rx="7"/><text x="222" y="191">getFirestore(app)</text>
+  </g>
+  <text x="40" y="236" font-size="11.5" class="muted">tutto questo è visibile da chiunque apra i DevTools</text>
+  <rect class="box" x="500" y="20" width="380" height="230" rx="12" style="stroke:var(--ink)"/>
+  <text x="520" y="46" font-weight="700">☁️ Progetto Firebase (server Google)</text>
+  <rect class="box" x="520" y="62" width="340" height="40" rx="7" style="stroke:var(--warn);fill:var(--warn-soft)"/><text x="535" y="87" font-size="12.5">🛂 Security Rules: deciso QUI, sul server</text>
+  <rect class="box auth" x="520" y="120" width="160" height="80" rx="8"/><text x="600" y="155" text-anchor="middle" font-weight="700" class="t-auth">🔐 Auth</text><text x="600" y="175" text-anchor="middle" font-size="11" class="muted">utenti, sessioni</text>
+  <rect class="box fs" x="700" y="120" width="160" height="80" rx="8"/><text x="780" y="155" text-anchor="middle" font-weight="700" class="t-fs">🗄️ Firestore</text><text x="780" y="175" text-anchor="middle" font-size="11" class="muted">dati</text>
+  <path class="wire wire-auth" d="M190 186 C 330 186 380 160 518 160"/>
+  <path class="wire wire-fs" d="M360 186 C 450 200 620 240 760 202"/>
+  <text x="420" y="150" font-size="11.5" class="muted">richieste HTTPS</text>
+</svg>
+</div>
+
+<h2 id="flusso"><span class="section-num">4</span>Flusso animato: cosa succede quando la tua app parte</h2>
+<template id="svg-boot">
+<svg class="diagram" viewBox="0 0 900 200" role="img" aria-label="Valutazione dei moduli all'avvio">
+  <g data-node="index"><rect class="box react" x="20" y="60" width="150" height="70" rx="10"/><text x="95" y="90" text-anchor="middle" font-weight="700" class="t-react">index.js</text><text x="95" y="110" text-anchor="middle" font-size="11" class="muted">punto d'ingresso</text></g>
+  <g data-node="comp"><rect class="box react" x="200" y="60" width="160" height="70" rx="10"/><text x="280" y="90" text-anchor="middle" font-weight="700">componenti</text><text x="280" y="110" text-anchor="middle" font-size="11" class="muted">SignInForm, …</text></g>
+  <g data-node="utils"><rect class="box" x="390" y="30" width="230" height="140" rx="10" style="stroke:var(--ink)"/><text x="505" y="54" text-anchor="middle" font-weight="700" class="mono">firebase.utils.js</text><text x="405" y="80" font-size="11.5" class="mono">① initializeApp(config)</text><text x="405" y="102" font-size="11.5" class="mono">② getAuth()</text><text x="405" y="124" font-size="11.5" class="mono">③ getFirestore()</text><text x="405" y="146" font-size="11.5" class="mono">④ export funzioni</text></g>
+  <g data-node="sdk"><rect class="box" x="650" y="30" width="230" height="140" rx="10" style="stroke:var(--muted)"/><text x="765" y="54" text-anchor="middle" font-weight="700">SDK in memoria</text><text x="665" y="84" font-size="11.5" class="mono">apps: { '[DEFAULT]' }</text><text x="665" y="106" font-size="11.5" class="mono">auth  → legata all'app</text><text x="665" y="128" font-size="11.5" class="mono">db    → legato all'app</text></g>
+  <path data-node="w1" data-flow class="wire wire-react" d="M170 95 H198"/>
+  <path data-node="w2" data-flow class="wire" d="M360 95 H388" style="stroke:var(--ink)"/>
+  <path data-node="w3" data-flow class="wire" d="M620 100 H648" style="stroke:var(--ink)"/>
+</svg>
+</template>
+<pre class="code" id="code-boot" hidden>// firebase.utils.js
+import { initializeApp } from 'firebase/app';
+import { getAuth, GoogleAuthProvider } from 'firebase/auth';
+import { getFirestore } from 'firebase/firestore';
+
+const firebaseConfig = { apiKey: '…', authDomain: '…', projectId: '…' };
+
+const firebaseApp = initializeApp(firebaseConfig);
+
+const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({ prompt: 'select_account' });
+
+export const auth = getAuth();
+export const db = getFirestore();</pre>
+<div id="boot"></div>
+
+<h2 id="dati"><span class="section-num">5</span>Forma dei dati</h2>
+<div class="grid-2">
+  <div class="card"><b>firebaseApp</b> (restituita da <code>initializeApp</code>)<div id="insp-app" style="margin-top:8px"></div></div>
+  <div class="card"><b>auth</b> e <b>db</b> (semplificati)<div id="insp-svc" style="margin-top:8px"></div></div>
+</div>
+
+<h2 id="codice"><span class="section-num">6</span>Nel tuo codice: la parte alta di <code>firebase.utils.js</code></h2>
+<div class="annot">
+<pre class="code">import { initializeApp } from 'firebase/app';
+import {
+  getAuth,
+  signInWithPopup,
+  GoogleAuthProvider,
+} from 'firebase/auth';
+import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
+
+const firebaseConfig = {
+  apiKey: "AIza…",
+  authDomain: "crwn-clothing-db-ad3ed.firebaseapp.com",
+  projectId: "crwn-clothing-db-ad3ed",
+  // …
+};
+
+const firebaseApp = initializeApp(firebaseConfig);
+
+const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({ prompt: 'select_account' });
+
+export const auth = getAuth();
+export const db = getFirestore();</pre>
+<ol>
+  <li data-lines="1-7"><b>Tre sotto-pacchetti</b>: app (il nucleo), auth, firestore. Ognuno porta nel bundle solo ciò che importi.</li>
+  <li data-lines="9-14"><b>Config</b>: dati di identificazione, non segreti. Ma <b>non</b> metterci mai chiavi di servizio (per esempio un service account): quelle sì che danno accesso totale.</li>
+  <li data-lines="16"><b>initializeApp</b>: <code>firebaseApp</code> non viene più usata esplicitamente. <code>getAuth()</code> e <code>getFirestore()</code> senza argomenti trovano da sole l'app <code>'[DEFAULT]'</code>.</li>
+  <li data-lines="18-19"><b>Provider Google</b>: un oggetto di configurazione per il login con Google, creato una volta sola.</li>
+  <li data-lines="21-22"><b>Istanze esportate</b>: tutti i moduli che importano <code>auth</code> o <code>db</code> ricevono <b>le stesse</b> istanze.</li>
+</ol>
+</div>
+<div class="callout"><span class="title">Perché il codice in cima a un modulo viene eseguito una volta sola</span>
+Un modulo ES viene <b>valutato una volta</b>, al primo import. Gli import successivi, da qualsiasi file, ricevono gli stessi export già calcolati: il modulo resta in cache. Per questo <code>initializeApp</code> non viene ripetuta anche se dieci componenti importano <code>firebase.utils.js</code>. È un <b>singleton</b> "gratuito".</div>
+
+<h2 id="componenti"><span class="section-num">7</span>Nei componenti: chi importa cosa</h2>
+<div class="table-wrap"><table>
+<tr><th>File</th><th>Importa da firebase.utils.js</th><th>Usa l'SDK direttamente?</th></tr>
+<tr><td><code>sign-in-form.component.jsx</code></td><td><code>signInWithGooglePopup</code>, <code>signInAuthUserWithEmailAndPassword</code>, <code>createUserDocumentFromAuth</code></td><td>No ✔</td></tr>
+<tr><td><code>sign-up-form.component.jsx</code></td><td><code>createAuthUserWithEmailAndPassword</code>, <code>createUserDocumentFromAuth</code></td><td>No ✔</td></tr>
+<tr><td><code>user.context.jsx</code> (M5)</td><td><code>onAuthStateChangedListener</code>, <code>createUserDocumentFromAuth</code></td><td>No ✔</td></tr>
+<tr><td><code>navigation.component.jsx</code> (M5)</td><td><code>signOutUser</code></td><td>No ✔</td></tr>
+<tr><td><code>firebase.utils.js</code></td><td>—</td><td><b>Sì: l'unico</b></td></tr>
+</table></div>
+<p>Il grafo delle dipendenze ha <b>un solo punto di contatto</b> con Firebase. È la stessa idea di M3 ⑦, vista dal lato dei file.</p>
+
+<h2 id="documentazione"><span class="section-num">8</span>Documentazione ufficiale ↔ corso</h2>
+<div class="grid-2">
+<div><p><span class="pill fs">DOC</span> <a href="https://firebase.google.com/docs/web/setup" target="_blank" rel="noopener">Add Firebase to your JavaScript project</a></p>
+<pre class="code">import { initializeApp } from 'firebase/app';
+import { getFirestore, collection, getDocs } from 'firebase/firestore/lite';
+// Follow this pattern to import other Firebase services
+// import { } from 'firebase/&lt;service>';
+
+// TODO: Replace the following with your app's Firebase configuration
+const firebaseConfig = {
+  //...
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);</pre></div>
+<div><p><span class="pill react">CORSO</span></p>
+<pre class="code">import { initializeApp } from 'firebase/app';
+import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
+
+const firebaseConfig = { /* … */ };
+
+const firebaseApp = initializeApp(firebaseConfig);
+
+export const db = getFirestore();</pre></div>
+</div>
+<p style="font-size:13px;color:var(--muted)">Snippet di Firebase (Google), licenza Apache 2.0.</p>
+<div class="table-wrap"><table>
+<tr><th>Differenza</th><th>Spiegazione</th></tr>
+<tr><td><code>'firebase/firestore/lite'</code> contro <code>'firebase/firestore'</code></td><td><b>Leggi l'import!</b> La versione <i>lite</i> è più leggera e lavora solo con richieste REST: niente listener in tempo reale e niente cache offline. Il corso usa la versione completa. Se copi lo snippet così com'è, cambi libreria senza accorgertene.</td></tr>
+<tr><td><code>getFirestore(app)</code> contro <code>getFirestore()</code></td><td>Due overload (T1, esercizio E1): senza argomento si usa l'app di default.</td></tr>
+<tr><td><code>const app</code> contro <code>const firebaseApp</code></td><td>Solo un nome. Nel corso la variabile non viene più usata, ma <code>initializeApp</code> va chiamata comunque: è lei che registra l'app di default.</td></tr>
+<tr><td><code>// import { } from 'firebase/&lt;service&gt;'</code></td><td>Il commento è una <b>regola</b>: ogni servizio ha il suo sotto-percorso.</td></tr>
+</table></div>
+
+<h2 id="errori"><span class="section-num">9</span>Errori tipici</h2>
+<div class="card"><h3 style="margin-top:0">❶ Usare un servizio prima di initializeApp</h3>
+<pre class="code">FirebaseError: Firebase: No Firebase App '[DEFAULT]' has been created - call initializeApp() first (app/no-app).</pre>
+<p>Succede se un modulo chiama <code>getAuth()</code> prima che <code>initializeApp</code> sia stata eseguita, per esempio perché hai spostato le chiamate in un altro file e l'ordine degli import è cambiato. Il messaggio dice esattamente cosa fare.</p></div>
+<div class="card"><h3 style="margin-top:0">❷ Inizializzare due volte con config diverse</h3>
+<pre class="code">FirebaseError: Firebase: Firebase App named '[DEFAULT]' already exists with different options.
+Existing: '…'. New: '…'. (app/duplicate-app).</pre>
+<p>Con la <b>stessa</b> config, le versioni recenti dell'SDK restituiscono l'app esistente. Con config <b>diverse</b> e lo stesso nome, errore. Se ti servono due progetti, usa due nomi: <code>initializeApp(config2, 'secondo')</code>.</p></div>
+<div class="card"><h3 style="margin-top:0">❸ "Nascondo l'apiKey in .env, così è sicuro"</h3>
+<p>In Create React App le variabili <code>REACT_APP_*</code> vengono <b>scritte nel bundle</b> in fase di build: finiscono comunque nel browser. Un <code>.env</code> serve a gestire ambienti diversi (sviluppo, produzione) o a non pubblicare la config su GitHub per ordine, non a renderla segreta.</p>
+<div class="grid-2"><div class="callout bad"><span class="title">Modello sbagliato</span>"Se il segreto non si vede nel codice sorgente, è al sicuro."</div><div class="callout good"><span class="title">Modello giusto</span>"Tutto ciò che il browser riceve è pubblico. La sicurezza sta <b>sul server</b>: Rules, Auth, App Check."</div></div></div>
+<div class="card"><h3 style="margin-top:0">❹ Mischiare API compat e modulare</h3>
+<pre class="code">import firebase from 'firebase/compat/app';   // vecchio stile
+import { getAuth } from 'firebase/auth';       // nuovo stile</pre>
+<p>Funziona, ma raddoppia il codice nel bundle e confonde chi legge. In un progetto nuovo si usa solo la modulare.</p></div>
+
+<h2 id="verifica"><span class="section-num">10</span>Verifica</h2>
+<div class="callout" id="score"></div>
+<div id="q1"></div><div id="q2"></div><div id="q3"></div>
+<h3>Domande da dev</h3>
+<div id="q4"></div><div id="q5"></div><div id="q6"></div>
+
+<h2 id="esercizi"><span class="section-num">11</span>Esercizi</h2>
+<div id="ex-list"></div>
+
+<div class="footer-nav"><a class="btn" href="m0-basi.html">← M0</a><a class="btn" href="m2-auth.html">M2 Auth →</a></div>
+</main>
+</div>
+<script src="../assets/manifest.js"></script>
+<script src="../assets/registro.js"></script>
+<script src="../assets/glossario.js"></script>
+<script src="../assets/app.js"></script>
+<script>
+Lab.renderInspector(document.getElementById('insp-app'), { __type: 'FirebaseAppImpl', name: '[DEFAULT]', options: { apiKey: 'AIza…', authDomain: 'crwn-clothing-db-ad3ed.firebaseapp.com', projectId: 'crwn-clothing-db-ad3ed', appId: '1:5062…:web:…' }, automaticDataCollectionEnabled: true });
+Lab.renderInspector(document.getElementById('insp-svc'), { auth: { __type: 'AuthImpl', app: { __type: 'FirebaseApp [DEFAULT]' }, currentUser: null, name: '[DEFAULT]' }, db: { __type: 'Firestore', type: 'firestore', app: { __type: 'FirebaseApp [DEFAULT]' } } });
+
+Lab.stepper('#boot', { title: 'Avvio dell\'app', svg: '#svg-boot', code: '#code-boot', steps: [
+  { title: 'index.js importa App, App importa i componenti', on: ['index', 'comp'], hot: ['w1'], lines: [], dataLabel: 'Grafo degli import', text: '<p>Il bundler segue gli <code>import</code> a partire da <code>index.js</code>. Prima di eseguire un modulo, esegue i moduli che importa.</p>', data: { ordine: ['index.js', 'App.js', 'routes/…', 'sign-in-form…', 'firebase.utils.js'] } },
+  { title: 'Primo import di firebase.utils.js: il modulo viene valutato', on: ['comp', 'utils'], hot: ['w2'], lines: [[2, 4]], dataLabel: 'Stato del modulo', text: '<p>Il primo componente che importa da <code>firebase.utils.js</code> fa eseguire il modulo, dall\'alto verso il basso. Prima però vengono caricati i sotto-pacchetti dell\'SDK.</p>', data: { 'firebase.utils.js': 'in valutazione' } },
+  { title: 'initializeApp registra l\'app di default', on: ['utils', 'sdk'], hot: ['w3'], lines: [8], dataLabel: 'Registro interno dell\'SDK', text: '<p>Nessuna chiamata di rete: viene solo creato un oggetto in memoria con la config, sotto il nome <code>\'[DEFAULT]\'</code>.</p>', data: { apps: { '[DEFAULT]': { __type: 'FirebaseApp', projectId: 'crwn-clothing-db-ad3ed' } } } },
+  { title: 'getAuth / getFirestore trovano l\'app di default', on: ['utils', 'sdk'], lines: [13, 14], dataLabel: 'Istanze create', text: '<p>Ogni servizio viene legato all\'app. Auth inizia anche a ripristinare la sessione salvata, in modo <b>asincrono</b>: per questo all\'inizio <code>auth.currentUser</code> può valere null (M5).</p>', data: { auth: { __type: 'Auth', currentUser: 'null (per ora)' }, db: { __type: 'Firestore' } } },
+  { title: 'Gli import successivi riusano tutto', on: ['comp', 'utils'], lines: [[13, 14]], dataLabel: 'Secondo componente che importa', text: '<p>SignUpForm importa lo stesso file: il modulo è già in cache e <b>non</b> viene rieseguito. Riceve lo stesso <code>auth</code> e lo stesso <code>db</code>.</p>', data: { 'modulo rieseguito?': false, 'stessa istanza auth?': true } },
+] });
+
+Lab.quiz('#q1', { id: 'm1-q1', question: 'Un utente apre i DevTools, copia la tua <code>firebaseConfig</code> e la usa in un suo script. Cosa può fare?',
+  options: [ { t: 'Tutto: leggere e scrivere ogni dato', why: '<span class="step">Solo se le tue Security Rules lo permettono. La config identifica il progetto, non dà permessi.</span>' }, { t: 'Esattamente ciò che le Security Rules permettono a un client qualunque (e a lui, se fa login)', ok: true, why: '<span class="step">Il suo script è un client come la tua app. Per il server sono indistinguibili, a meno che tu non usi App Check. Da qui l\'importanza delle Rules.</span>' }, { t: 'Niente, l\'apiKey è legata al tuo dominio', why: '<span class="step">Si possono aggiungere restrizioni alle API key nella Google Cloud Console, ma non sono la protezione principale dei dati di Firestore.</span>' } ] });
+Lab.quiz('#q2', { id: 'm1-q2', question: 'Cosa fa <code>initializeApp(config)</code>?',
+  options: [ { t: 'Si collega al server e verifica la config', why: '<span class="step">Non fa chiamate di rete: crea un oggetto in memoria. Gli errori di config emergono alla prima richiesta reale.</span>' }, { t: 'Registra in memoria un\'app con nome <code>[DEFAULT]</code>, che i servizi useranno', ok: true }, { t: 'Crea il progetto Firebase', why: '<span class="step">Il progetto si crea dalla console Firebase. Il codice si collega a un progetto che esiste già.</span>' } ] });
+Lab.quiz('#q3', { id: 'm1-q3', question: 'Dieci componenti importano <code>auth</code> da <code>firebase.utils.js</code>. Quante volte viene eseguita <code>initializeApp</code>?',
+  options: [ { t: '10', why: '<span class="step">I moduli ES vengono valutati una volta sola: gli import successivi ricevono gli export dalla cache.</span>' }, { t: '1', ok: true, why: '<span class="step">È il singleton naturale dei moduli. Lo stesso vale per <code>createContext</code> a livello di modulo (M5).</span>' }, { t: 'Dipende da quante volte i componenti vengono renderizzati', why: '<span class="step">Il codice al livello più alto del modulo non fa parte di nessun componente: non viene rieseguito ai render.</span>' } ] });
+Lab.quiz('#q4', { id: 'm1-q4', question: 'Sposti <code>export const auth = getAuth();</code> in un nuovo file <code>auth.js</code>, che non importa niente da <code>firebase.utils.js</code>. Alcuni componenti importano solo da <code>auth.js</code>. Cosa rischi?',
+  options: [ { t: 'Niente: getAuth trova sempre l\'app', why: '<span class="step">La trova solo se <code>initializeApp</code> è già stata eseguita. Se <code>auth.js</code> viene valutato per primo, l\'app non esiste ancora.</span>' }, { t: '<code>app/no-app</code>, a seconda dell\'ordine in cui il bundler valuta i moduli', ok: true, why: '<span class="step">Rendi esplicita la dipendenza: <code>auth.js</code> deve importare l\'app (<code>import { firebaseApp } from \'./app\'</code>) e chiamare <code>getAuth(firebaseApp)</code>. Una dipendenza dichiarata non dipende dall\'ordine.</span>' }, { t: 'Due sessioni di login diverse', why: '<span class="step">Ci sarebbe comunque una sola app di default. Il problema è <b>quando</b> esiste, non quante ce ne sono.</span>' } ] });
+Lab.quiz('#q5', { id: 'm1-q5', question: 'Copi dalla guida: <code>import { getFirestore, doc, onSnapshot } from \'firebase/firestore/lite\'</code>. Cosa succede?',
+  options: [ { t: 'Funziona come prima', why: '<span class="step">La versione <i>lite</i> non ha i listener in tempo reale: <code>onSnapshot</code> non è tra i suoi export.</span>' }, { t: 'Errore di import: <code>onSnapshot</code> non esiste in firestore/lite', ok: true, why: '<span class="step">Leggere l\'import è parte del leggere la documentazione. Due path quasi uguali sono due librerie diverse.</span>' }, { t: 'Funziona, ma più lentamente', why: '<span class="step">Non è una questione di velocità: le due versioni hanno un\'API diversa.</span>' } ] });
+Lab.quiz('#q6', { id: 'm1-q6', question: 'Regole del database: <code>allow read, write: if request.time &lt; timestamp.date(2026, 1, 1);</code>. È il 18/11/2026. Cosa succede quando la tua app chiama <code>getDoc</code>?',
+  options: [ { t: 'Funziona: sei loggato', why: '<span class="step">La regola non guarda <code>request.auth</code>, guarda solo la data. È la tipica regola di "test mode".</span>' }, { t: 'Fallisce con <code>permission-denied</code>: la finestra di test è scaduta', ok: true, why: '<span class="step">Il codice non è cambiato, ma il server ora rifiuta tutto. Un dev, davanti a un "si è rotto da solo", controlla per prima cosa ciò che vive <b>fuori</b> dal codice: regole, quote, config.</span>' }, { t: 'Funziona in lettura, fallisce in scrittura', why: '<span class="step"><code>read, write</code> sono nella stessa regola: o passano tutte e due o nessuna.</span>' } ] });
+Lab.quizScore('#score');
+Lab.exercises('#ex-list', 'm1');
+</script>
+</body>
+</html>

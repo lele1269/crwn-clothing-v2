@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Glossario</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body data-root=".">
+<div class="lab">
+<nav class="lab-nav" id="lab-nav"></nav>
+<main class="lab-main">
+  <div class="kicker">Riferimento</div>
+  <h1>Glossario</h1>
+  <p class="lead">Tutti i termini del percorso. Nelle lezioni sono le parole <dfn data-term="docref">sottolineate a puntini</dfn>.</p>
+  <input id="filter" type="search" placeholder="Cerca un termine…" style="width:100%;max-width:420px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font:15px var(--font)">
+  <div id="list"></div>
+</main>
+</div>
+<script src="assets/manifest.js"></script>
+<script src="assets/registro.js"></script>
+<script src="assets/glossario.js"></script>
+<script src="assets/app.js"></script>
+<script>
+const { h } = Lab;
+const mods = Object.fromEntries(LAB_MODULES.map((m) => [m.id, m]));
+const list = document.getElementById('list');
+const entries = Object.entries(LAB_GLOSSARY).sort((a, b) => a[1].t.localeCompare(b[1].t, 'it'));
+function render(q) {
+  list.innerHTML = '';
+  entries.filter(([, g]) => !q || (g.t + ' ' + g.d).toLowerCase().includes(q.toLowerCase())).forEach(([, g]) => {
+    const m = mods[g.m];
+    list.append(h('div', { class: 'card', style: 'padding:14px 18px' },
+      h('b', {}, g.t), ' ', m ? h('span', { class: 'tag', style: 'font-size:12px;color:var(--muted)' }, `· ${m.num} ${m.title}`) : null,
+      h('p', { style: 'margin:4px 0 0' }, g.d)));
+  });
+}
+document.getElementById('filter').addEventListener('input', (e) => render(e.target.value));
+render('');
+</script>
+</body>
+</html>

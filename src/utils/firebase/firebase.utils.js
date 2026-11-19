@@ -6,17 +6,17 @@ import {
   GoogleAuthProvider,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-  signOut
+  signOut,
 } from 'firebase/auth';
 import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAJLac1CzyL-xz294inaYJTh9qrqg9Yaas",
-  authDomain: "crwn-clothing-db-ad3ed.firebaseapp.com",
-  projectId: "crwn-clothing-db-ad3ed",
-  storageBucket: "crwn-clothing-db-ad3ed.firebasestorage.app",
-  messagingSenderId: "506280368666",
-  appId: "1:506280368666:web:e26d255fff9b83a11ecfa3"
+  apiKey: 'AIzaSyAJLac1CzyL-xz294inaYJTh9qrqg9Yaas',
+  authDomain: 'crwn-clothing-db-ad3ed.firebaseapp.com',
+  projectId: 'crwn-clothing-db-ad3ed',
+  storageBucket: 'crwn-clothing-db-ad3ed.firebasestorage.app',
+  messagingSenderId: '506280368666',
+  appId: '1:506280368666:web:e26d255fff9b83a11ecfa3',
 };
 
 const firebaseApp = initializeApp(firebaseConfig);
@@ -27,7 +27,7 @@ googleProvider.setCustomParameters({
   prompt: 'select_account',
 });
 
-export const auth = getAuth();
+export const auth = getAuth(firebaseApp);
 export const signInWithGooglePopup = () =>
   signInWithPopup(auth, googleProvider);
 export const signInWithGoogleRedirect = () =>
@@ -79,7 +79,7 @@ export const signInAuthUserWithEmailAndPassword = async (email, password) => {
 export const SignOutUser = async () => {
   return await signOut(auth);
 }; // ? perchè questa funzione è asincrona se lavora solo nel contesto locale e non fa chiamate verso l'esterno?
-  // * perchè si utilizza la funzione di Firebase SignOut(auth) che è di fatto chiamata asincrona Promise
+// * perchè si utilizza la funzione di Firebase SignOut(auth) che è di fatto chiamata asincrona Promise
 
-  // ? cos'è l'oggetto Auth
-  // * app è la connessione al progetto Firebase, auth è il servizio di login di quell'app, auth.currentUser è chi è loggato adesso.
+// ? cos'è l'oggetto Auth
+// * app è la connessione al progetto Firebase, auth è il servizio di login di quell'app, auth.currentUser è chi è loggato adesso.

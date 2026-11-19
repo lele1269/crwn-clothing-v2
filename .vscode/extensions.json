@@ -1,0 +1,13 @@
+{
+  "recommendations": [
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "stylelint.vscode-stylelint",
+    "usernamehw.errorlens",
+    "editorconfig.editorconfig",
+    "streetsidesoftware.code-spell-checker",
+    "streetsidesoftware.code-spell-checker-italian",
+    "christian-kohler.path-intellisense",
+    "formulahendry.auto-rename-tag"
+  ]
+}

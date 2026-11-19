@@ -6,6 +6,7 @@ import {
   GoogleAuthProvider,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
+  signOut
 } from 'firebase/auth';
 import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
 
@@ -74,3 +75,11 @@ export const signInAuthUserWithEmailAndPassword = async (email, password) => {
 
   return await signInWithEmailAndPassword(auth, email, password);
 };
+
+export const SignOutUser = async () => {
+  return await signOut(auth);
+}; // ? perchè questa funzione è asincrona se lavora solo nel contesto locale e non fa chiamate verso l'esterno?
+  // * perchè si utilizza la funzione di Firebase SignOut(auth) che è di fatto chiamata asincrona Promise
+
+  // ? cos'è l'oggetto Auth
+  // * app è la connessione al progetto Firebase, auth è il servizio di login di quell'app, auth.currentUser è chi è loggato adesso.

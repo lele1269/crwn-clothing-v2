@@ -1,0 +1,60 @@
+{
+  "[ampscript]": {
+    "editor.defaultFormatter": "joernberkefeld.sfmc-language"
+  },
+  "[ssjs]": {
+    "editor.defaultFormatter": "joernberkefeld.sfmc-language"
+  },
+  "[sfmc]": {
+    "editor.defaultFormatter": "joernberkefeld.sfmc-language"
+  },
+  "[handlebars]": {
+    "editor.defaultFormatter": "joernberkefeld.sfmc-language"
+  },
+  "[sql]": {
+    "editor.defaultFormatter": "joernberkefeld.sfmc-language"
+  },
+  "js/ts.experimental.useTsgo": false,
+  "editor.formatOnSave": true,
+  "prettier.requireConfig": true,
+  "[javascript]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[javascriptreact]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[json]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[scss]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[css]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[html]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+
+  // --- ESLint ---
+  "eslint.enable": true,
+  "eslint.run": "onType",
+  "eslint.validate": ["javascript", "javascriptreact"],
+
+  // --- Stylelint (SCSS/CSS) al posto del validatore integrato ---
+  "stylelint.validate": ["css", "scss"],
+  "css.validate": false,
+  "scss.validate": false,
+
+  // --- Correzioni automatiche al salvataggio (Cmd + S) ---
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit",
+    "source.fixAll.stylelint": "explicit"
+  },
+
+  // --- Error Lens: mostra errori e warning direttamente sulla riga ---
+  "errorLens.enabledDiagnosticLevels": ["error", "warning"],
+
+  // --- Emmet nei file JSX (div.classe + Tab) ---
+  "emmet.includeLanguages": { "javascript": "javascriptreact" },
+
+  // --- Import automatici e aggiornamento quando sposti file ---
+  "javascript.updateImportsOnFileMove.enabled": "always",
+
+  // --- Pulizia file ---
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+  "files.eol": "\n",
+
+  // --- Controllo ortografico ---
+  "cSpell.language": "en,it",
+  "cSpell.words": ["crwn", "firestore"]
+}

@@ -15,6 +15,16 @@ Professore propositivo, stimolante e **fermo nelle valutazioni**.
 
 1. Leggi il file dell'esercizio **per intero**: codice, risposte scritte e numero di aiuti dichiarati.
 2. Se l'esercizio è eseguibile, lancia `node learning/esercizi/verifica.mjs <id>` e riporta l'esito.
+   Se è un esercizio **quiz** (`quiz: true` nel manifest), lo studente lo svolge con
+   `node learning/esercizi/quiz.mjs <id>`: leggi `<modulo>/feedback/eN-tT-risposte.md` (e il `.json`).
+   - La previsione è registrata **prima** che lo studente veda l'output: non serve altro controllo di onestà.
+   - Il formato non si valuta mai (il confronto ignora apici, virgole, parentesi e spazi). Si valutano
+     le previsioni, il perché (coerente con la previsione?) e l'idea sbagliata dei blocchi con ✘.
+   - Tipi di domanda: `output` (codice eseguito, anche con i simulatori del Lab), `scelta` (lettera),
+     `ordina` (numeri), `aperta` (testo libero: ◆ la valuti tu; lo studente vede i punti chiave DOPO aver risposto
+     e scrive cosa gli mancava; valuta la risposta data, non l'autovalutazione).
+   - I blocchi stanno in `esercizi/_lab/quiz/<id>.mjs`. Dopo una correzione che rivela gli output,
+     il tentativo successivo usa **blocchi nuovi** sugli stessi concetti (aggiorna `tentativo`).
 3. Vai oltre i test: cerca i casi limite non coperti, il codice che passa "per caso" e le spiegazioni incoerenti con il codice.
 4. Assegna il voto con la rubrica:
    - Correttezza 0–4 · Logica e comprensione 0–3 · Qualità 0–2 · Autonomia 0–1

@@ -1,0 +1,95 @@
+{
+  "id": "m0-e1",
+  "tentativo": 4,
+  "iniziato": "2026-11-23T22:09:54.151Z",
+  "aiuti": 0,
+  "blocchi": {
+    "B1": {
+      "previsione": [
+        "1, 2, false, true"
+      ],
+      "perche": "tags.lenght è un array quindi stampa 1, a.met.v stampa 2 perchè avendo la stessa referenza b.meta.v modifica anche a quindi di conseguenza a.tags === b.tags è falso perchè con lo spread su tags b si crea una copia indipendente ma non per meta che rimane referenziato verso lo stesso \"cassetto\" e quindi a.meta === b.meta = vero",
+      "reale": [
+        "1 2 false true"
+      ],
+      "ok": true,
+      "quando": "2026-11-23T22:14:07.214Z"
+    },
+    "B2": {
+      "previsione": [
+        "theme: 'dark',lang: 'it',size: 14"
+      ],
+      "perche": "perchè il primo valore di defaults.theme viene sovrascritto da settings.theme, lang rimane al suo posto e defaults.size viene sovrascritto da user.size",
+      "reale": [
+        "{ theme: 'dark', lang: 'it', size: 14 }"
+      ],
+      "ok": true,
+      "quando": "2026-11-23T22:16:43.357Z"
+    },
+    "B3": {
+      "previsione": [
+        "Email, {id: 'maill', type: 'email'}",
+        "2, undefined"
+      ],
+      "perche": "perchè label stampa il valore definito di label mentre ...inputProps stampa un oggetto contenente id e type. Object.keys è un array contenetnte le chiavi di inputProps quindi stampa 2 essendo 2 chiavi e inputProps.label non esiste quindi undefined.",
+      "reale": [
+        "Email { id: 'mail', type: 'email' }",
+        "2 undefined"
+      ],
+      "ok": false,
+      "quando": "2026-11-23T22:22:25.228Z",
+      "ideaSbagliata": "ho fatto un errore di battirura non ho inserito la ,"
+    },
+    "B4": {
+      "previsione": [
+        "a",
+        "c",
+        "d",
+        "e",
+        "f",
+        "b"
+      ],
+      "perche": "perchè prima viene eseguito il codice sincrono, poi i microtasks e poi il resto",
+      "reale": [
+        "a",
+        "c",
+        "f",
+        "d",
+        "e",
+        "b"
+      ],
+      "ok": false,
+      "quando": "2026-11-23T22:25:43.853Z",
+      "ideaSbagliata": "perchè ho intepretato male il .then che fa console.log su d intepretandolo come codice sincrono ma inverità è asincrono e fa parte promise. Di conseguenza ho sbagliato gli altri"
+    },
+    "B5": {
+      "previsione": [
+        "nero-undefined, nero-M, null-S, nero-undefined"
+      ],
+      "perche": "pick() senza passare niente conosce il valore di default per color ma size non viene mai dichiarato quindi undefined. pick({siz: 'M'}) passa il valore di size all'oggetto che viene quindi popolato con nero-M. pick({ color: null, size: 'S' }) null sovrascrive il valore di defult e qjuindi il risultato è null-'S'. pick({ color: undefined })) stampa sempre nero-undefined perchè il valore di default viene stampato sia se vuoto sia se undefined.",
+      "reale": [
+        "nero-undefined nero-M null-S nero-undefined"
+      ],
+      "ok": true,
+      "quando": "2026-11-23T22:36:18.080Z"
+    },
+    "B6": {
+      "previsione": [
+        "sincrono",
+        "utente 1",
+        "continuo",
+        "Error: id non valido"
+      ],
+      "perche": "sincrono è il primo valore che viene stampato perchè è codice sincrono. Utente 1 è il secondo valore perchè viene passato e ritornato dalla funzione fetchUser chiamata nel blocco try dopodichè prosegue con 'continuo' perchè fetchUser(-1) viene accodato essendo una promise e va in errore al di fuori del catch e quindi l'ultimo valore è un codice errore Uncaught",
+      "reale": [
+        "sincrono",
+        "utente 1",
+        "continuo",
+        "Errore: id non valido"
+      ],
+      "ok": true,
+      "quando": "2026-11-23T22:41:45.640Z"
+    }
+  },
+  "finito": "2026-11-23T22:41:50.650Z"
+}

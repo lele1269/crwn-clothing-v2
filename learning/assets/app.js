@@ -366,8 +366,12 @@
       const hintsUsed = store.get('hints:' + ex.id, 0);
       const body = h('div', { class: 'ex-body' },
         h('p', {}, h('b', {}, 'Obiettivo: '), ex.goal),
-        h('p', {}, h('b', {}, 'File: '), h('code', {}, `learning/${ex.file}`)),
-        ex.runnable
+        ex.quiz
+          ? h('p', {}, h('b', {}, 'Come si fa: '), 'nel terminale lancia ', h('code', {}, `node learning/esercizi/quiz.mjs ${ex.id}`), '. Un blocco alla volta: prevedi, spiega, confronta. Niente file da modificare; le risposte si salvano da sole.')
+          : h('p', {}, h('b', {}, 'File: '), h('code', {}, `learning/${ex.file}`)),
+        ex.quiz
+          ? h('p', {}, h('b', {}, 'Verifica: '), 'automatica, subito dopo ogni previsione. Apici, virgole e parentesi non contano: contano valori e ordine.')
+          : ex.runnable
           ? h('p', {}, h('b', {}, 'Autoverifica: '), h('code', {}, `node learning/esercizi/verifica.mjs ${ex.id}`), ' — i test ti dicono se FUNZIONA. Il voto valuta anche se hai CAPITO.')
           : h('p', {}, h('b', {}, 'Autoverifica: '), 'nessun test automatico, si valuta il ragionamento scritto.'),
         h('p', {}, h('b', {}, 'Consegna: '), 'scrivi in Claude Code ', h('code', {}, `correggi ${ex.id}`), '. Dichiara nel file quanti aiuti hai aperto: incide sul voto di autonomia.'),

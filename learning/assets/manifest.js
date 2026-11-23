@@ -26,7 +26,7 @@ window.LAB_EXERCISES = {
     {
       id: 'm3-e1', stars: 1, title: 'Leggi e prevedi',
       goal: 'Prevedere cosa fa createUserDocumentFromAuth in scenari diversi, senza eseguirlo.',
-      file: 'esercizi/m3/e1-prevedi.md', runnable: false,
+      file: 'esercizi/m3/feedback/', runnable: false, quiz: true,
       hints: [
         'Ripercorri la funzione riga per riga e per ogni riga chiediti: "che cosa c\'è in questa variabile adesso?"',
         'Uno snapshot è una fotografia: se il documento non esiste, la foto è comunque una foto, solo che è vuota.',
@@ -98,7 +98,7 @@ window.LAB_EXERCISES = {
 
 /* Livelli: basati SOLO sugli XP ufficiali (esercizi valutati dal professore). */
 window.LAB_EXERCISES.m0 = [
-  { id: 'm0-e1', stars: 1, title: 'Prevedi l\'output', goal: 'Prevedere l\'output di 6 blocchi (riferimenti, spread, rest, event loop, default) e verificarlo DOPO.', file: 'esercizi/m0/e1-prevedi.md', runnable: false,
+  { id: 'm0-e1', stars: 1, title: 'Prevedi l\'output', goal: 'Prevedere l\'output di 6 blocchi (riferimenti, spread, rest, event loop, default) e verificarlo DOPO.', file: 'esercizi/m0/feedback/', runnable: false, quiz: true,
     hints: ['Per i riferimenti: disegna etichette e scatole come nella sezione ③.', 'Per l\'event loop: tre colonne su un foglio, cioè sincrono, microtask, task.', 'Default: scatta solo con undefined.'] },
   { id: 'm0-e2', stars: 2, title: 'Destructuring, spread, rest', goal: 'Cinque funzioni pure su oggetti e array, senza mai modificare l\'input.', file: 'esercizi/m0/e2-oggetti.mjs', runnable: true,
     hints: ['updateField è letteralmente il tuo handleChange.', 'withDefaults: prima togli dalle opzioni le chiavi con valore undefined (Object.entries + filter + Object.fromEntries).', 'omitKey: const { [key]: _, ...rest } = obj.'] },
@@ -124,7 +124,7 @@ window.LAB_EXERCISES.m1 = [
 ];
 
 window.LAB_EXERCISES.m2 = [
-  { id: 'm2-e1', stars: 1, title: 'Prevedi il comportamento di Auth', goal: 'Sequenza del sign-up, persistenza, codici di errore reali e loro significato.', file: 'esercizi/m2/e1-prevedi.md', runnable: false,
+  { id: 'm2-e1', stars: 1, title: 'Prevedi il comportamento di Auth', goal: 'Sequenza del sign-up, persistenza, codici di errore reali e loro significato.', file: 'esercizi/m2/feedback/', runnable: false, quiz: true,
     hints: ['La reference di createUserWithEmailAndPassword dice cosa succede dopo la creazione.', 'Persistenza: IndexedDB, ripristino asincrono.', 'Email enumeration protection: dal 15/09/2023.'] },
   { id: 'm2-e2', stars: 2, title: 'Classificare gli errori', goal: 'Mappare i codici Auth in show/ignore/generic e validare un sign-up completo.', file: 'esercizi/m2/e2-errori.mjs', runnable: true,
     hints: ['Prima di leggere error.code, controlla che error sia un oggetto.', 'Una mappa codice → messaggio (oggetto) è più leggibile di uno switch lungo.', 'validateSignUp: un oggetto vuoto, e un if per campo.'] },
@@ -137,7 +137,7 @@ window.LAB_EXERCISES.m2 = [
 ];
 
 window.LAB_EXERCISES.m4 = [
-  { id: 'm4-e1', stars: 1, title: 'Prevedi il form', goal: 'Simulare tasti, name sbagliati, bottoni senza type e lo state "fotografia".', file: 'esercizi/m4/e1-prevedi.md', runnable: false,
+  { id: 'm4-e1', stars: 1, title: 'Prevedi il form', goal: 'Simulare tasti, name sbagliati, bottoni senza type e lo state "fotografia".', file: 'esercizi/m4/feedback/', runnable: false, quiz: true,
     hints: ['Segui la catena della domanda 7: dove si rompe?', 'Un button senza type, dentro un form, è un submit.', 'Rileggi M0, ciclo di render, punto 4.'] },
   { id: 'm4-e2', stars: 2, title: 'La logica dei campi', goal: 'applyChange con checkbox e number, isComplete e freshDefaults: funzioni pure e difensive.', file: 'esercizi/m4/e2-campi.mjs', runnable: true,
     hints: ['"name in fields" dice se la chiave esiste.', 'Per la checkbox il dato è checked, non value.', 'structuredClone (MDN) fa una copia profonda.'] },

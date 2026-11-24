@@ -7,6 +7,7 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
+  onAuthStateChanged,
 } from 'firebase/auth';
 import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
 
@@ -83,3 +84,8 @@ export const SignOutUser = async () => {
 
 // ? cos'è l'oggetto Auth
 // * app è la connessione al progetto Firebase, auth è il servizio di login di quell'app, auth.currentUser è chi è loggato adesso.
+
+export const OnAuthUserStateChanged = (callback) => {
+  console.log('inside userAuthChange', auth);
+  return onAuthStateChanged(auth, callback);
+};

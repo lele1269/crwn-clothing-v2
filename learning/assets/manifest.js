@@ -11,6 +11,7 @@ window.LAB_MODULES = [
   { id: 'm3', num: 'M3', title: 'Firestore', sub: 'Collection, documenti, ref vs snapshot', file: 'moduli/m3-firestore.html' },
   { id: 'm4', num: 'M4', title: 'Form controllati', sub: 'State a oggetto, onChange, submit', file: 'moduli/m4-form.html' },
   { id: 'm5', num: 'M5', title: 'Context API', sub: 'Provider, useContext, re-render', file: 'moduli/m5-context.html' },
+  { id: 'm5b', num: 'M5+', title: 'Ciclo di vita del listener', sub: 'Componente, listener, scheda', file: 'moduli/m5b-ciclo-vita.html' },
   { id: 'm6', num: 'M6', title: 'End-to-end', sub: 'Il viaggio completo di un utente', file: 'moduli/m6-end-to-end.html' },
   { id: 't1', num: 'T1', group: 'toolkit', title: 'Leggere la documentazione', sub: 'Guide, API reference, MDN', file: 'moduli/t1-documentazione.html' },
 ];
